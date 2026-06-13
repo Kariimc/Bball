@@ -1,0 +1,78 @@
+[gd_scene load_steps=3 format=3 uid="uid://bball_sim_poc_main"]
+
+[ext_resource type="Script" path="res://Scoreboard.gd" id="1_score"]
+[ext_resource type="Script" path="res://SimClient.gd" id="2_sim"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_score")
+
+[node name="Sim" type="Node" parent="."]
+script = ExtResource("2_sim")
+
+[node name="PossessionTimer" type="Timer" parent="."]
+
+[node name="Quarter" type="Label" parent="."]
+offset_left = 540.0
+offset_top = 24.0
+offset_right = 612.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 28
+text = "Q1"
+horizontal_alignment = 1
+
+[node name="Clock" type="Label" parent="."]
+offset_left = 500.0
+offset_top = 64.0
+offset_right = 652.0
+offset_bottom = 110.0
+theme_override_font_sizes/font_size = 36
+text = "12:00"
+horizontal_alignment = 1
+
+[node name="AwayName" type="Label" parent="."]
+offset_left = 80.0
+offset_top = 40.0
+offset_right = 380.0
+offset_bottom = 76.0
+theme_override_font_sizes/font_size = 26
+text = "AWAY"
+
+[node name="AwayScore" type="Label" parent="."]
+offset_left = 80.0
+offset_top = 80.0
+offset_right = 380.0
+offset_bottom = 170.0
+theme_override_font_sizes/font_size = 72
+text = "0"
+
+[node name="HomeName" type="Label" parent="."]
+offset_left = 772.0
+offset_top = 40.0
+offset_right = 1072.0
+offset_bottom = 76.0
+theme_override_font_sizes/font_size = 26
+text = "HOME"
+horizontal_alignment = 2
+
+[node name="HomeScore" type="Label" parent="."]
+offset_left = 772.0
+offset_top = 80.0
+offset_right = 1072.0
+offset_bottom = 170.0
+theme_override_font_sizes/font_size = 72
+text = "0"
+horizontal_alignment = 2
+
+[node name="PlayFeed" type="RichTextLabel" parent="."]
+offset_left = 80.0
+offset_top = 200.0
+offset_right = 1072.0
+offset_bottom = 600.0
+bbcode_enabled = true
+scroll_following = true

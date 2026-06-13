@@ -11,11 +11,21 @@ Season lens: **2004-05 NBA Finals — San Antonio Spurs vs. Detroit Pistons.**
 
 | File | Purpose |
 |------|---------|
-| `nba_comprehensive_game_engine.py` | The engine: enums, vector math, entities, AI, possession + full-game simulation. |
-| `rosters_2005.py` | Pure roster data for the 2004-05 Spurs & Pistons (archetype-approximated ratings). |
-| `sim_service.py` | Stdlib HTTP / subprocess transport that exposes the engine to a front end (e.g. Godot). |
-| `godot/SimClient.gd` | Godot 4 client that fetches a game and replays its telemetry. |
-| `tests/test_engine.py` | 36-test regression suite (stdlib `unittest`). |
+| `nba_comprehensive_game_engine.py` | The engine: vector math, entities, AI, possession + full-game sim, injuries, steppable API. |
+| `rosters_2005.py` | 2004-05 Spurs & Pistons (archetype-approximated ratings). |
+| `rosters_modern.py` | Six fictional teams modeled on current-NBA play-style archetypes. |
+| `rosters.py` | Aggregator: one lookup over every team across eras. |
+| `series.py` | Playoff layer: best-of-N series & single-elimination brackets with persistent injuries. |
+| `sim_service.py` | Stdlib HTTP / subprocess transport (replay, live-step sessions, series, bracket). |
+| `godot/` | Runnable Godot 4 front-end POC (`project.godot`, `Main.tscn`, `SimClient.gd`, `Scoreboard.gd`). |
+| `tests/` | 54-test regression suite (stdlib `unittest`). |
+
+### Teams
+
+`2005`: `SAS` Spurs · `DET` Pistons.
+`modern` (fictional, archetype-based): `BOS` Boston Shamrocks · `DEN` Denver
+Altitude · `OKC` Oklahoma Thunderbirds · `MIL` Milwaukee Voltage · `DAL` Dallas
+Lone Stars · `MIN` Minnesota Tundra.
 
 ## Quick start
 
@@ -44,6 +54,41 @@ print(summary["home"]["players"][0])   # leading scorer's full box line
 # engine.play_by_play -> list of serializable possession telemetry dicts
 ```
 
+## Playoffs (series, brackets, injuries)
+
+```bash
+# Best-of-7 series (injuries persist across games; higher seed hosts 2-2-1-1-1)
+python series.py --a OKC --b BOS --best-of 7 --seed 7
+
+# Single-elimination bracket (power-of-two field, seeded by team strength)
+python series.py --bracket BOS,DEN,OKC,MIL,DAL,MIN,SAS,DET --seed 7
+
+python series.py --list   # show all team keys
+```
+
+Injuries are modeled in every game: risk scales with fatigue and falls with
+conditioning. A hurt player is subbed out and may miss future games
+(`games_out`), which `series.py` carries forward across the series. Tune via the
+engine's `injury_rate` (default `0.0005`, ~0.5 in-game injuries/game).
+
+## Two ways for a front end to consume it
+
+**1. Replay (deterministic, simplest).** Fetch a whole game, animate the
+`play_by_play` array at your own pace.
+
+**2. Live step-through (stateful session).** Drive it one possession at a time —
+the engine exposes `start_game()` + `step_possession()`, surfaced over HTTP as
+`/start` → repeated `/possession`.
+
+```python
+engine.start_game()
+while True:
+    play = engine.step_possession()
+    if play["game_over"]:
+        break
+    render(play)   # play["clock"], play["score"], play["events"], play["shot"]
+```
+
 ## Front-end integration (Godot via Python sim service)
 
 The engine is headless Python; Godot renders. Because every game is
@@ -57,22 +102,28 @@ python sim_service.py --port 8765
 
 #   GET /health
 #   GET /teams
-#   GET /simulate?seed=2005&difficulty=0.7&home=SAS&away=DET
+#   GET /simulate?seed=2005&difficulty=0.7&home=SAS&away=DET   (replay mode)
+#   GET /start?seed=7&home=BOS&away=DEN  ->  GET /possession?session=ID  (live step)
+#   GET /series?a=BOS&b=DEN&best_of=7
+#   GET /bracket?teams=BOS,DEN,OKC,MIL,DAL,MIN,SAS,DET
 
 # Or one-shot subprocess mode (Godot OS.execute):
 python sim_service.py --once --seed 7 --difficulty 0.7
 ```
 
-On the Godot side, attach `godot/SimClient.gd` to a node:
+**Runnable Godot POC:** with the service running, open the `godot/` folder in
+Godot 4 and press Play — `Main.tscn` drives a live scoreboard + play feed via
+`/start` → `/possession`. `SimClient.gd` supports both replay and live-step
+modes; `Scoreboard.gd` shows how to read the telemetry:
 
 ```gdscript
-var sim := SimClient.new()  # the script auto-creates its HTTPRequest child
-add_child(sim)
-sim.game_loaded.connect(func(summary): sim.replay())
+@onready var sim: SimClient = $Sim
+sim.session_started.connect(func(info): timer.start())   # live-step
 sim.possession_played.connect(func(play):
-    $Scoreboard.set_clock(play["clock"])
-    $Scoreboard.set_score(play["score"]["HOME"], play["score"]["AWAY"]))
-sim.simulate(2005, 0.7, "SAS", "DET")
+    $HomeScore.text = str(play["score"]["HOME"])
+    $Clock.text = play.get("clock", ""))
+sim.start_session(7, 0.6, "BOS", "DEN")
+# then call sim.step() on a Timer to advance one possession at a time
 ```
 
 ## Design

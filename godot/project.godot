@@ -1,0 +1,16 @@
+; Godot 4 project file for the Bball simulation front-end proof-of-concept.
+; Open this folder in Godot 4.x and press Play. Make sure the Python sim
+; service is running first:  python sim_service.py --port 8765
+
+config_version=5
+
+[application]
+
+config/name="Bball Sim POC"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1152
+window/size/viewport_height=648

@@ -292,6 +292,13 @@ class EntityProxy:
 
         # Conditioning: fatigue 0.0 (fresh) .. 1.0 (gassed).
         self.fatigue: float = 0.0
+
+        # Availability / injury tracking. `available` gates lineup selection;
+        # `games_out` is the count of *future* games missed (used by series sims).
+        self.available: bool = True
+        self.games_out: int = 0
+        self.injury_note: str = ""
+
         self.animation_log: List[str] = []
 
     def rating(self, key: str) -> int:
@@ -384,7 +391,8 @@ class Team:
         self.on_court: List[EntityProxy] = self._select_starters()
 
     def _select_starters(self) -> List[EntityProxy]:
-        pool = sorted(self.roster, key=lambda p: p.overall(), reverse=True)
+        pool = sorted((p for p in self.roster if p.available),
+                      key=lambda p: p.overall(), reverse=True)
         starters: List[EntityProxy] = []
         for needed in ("PG", "SG", "SF", "PF", "C"):
             for p in pool:
@@ -400,7 +408,16 @@ class Team:
 
     @property
     def bench(self) -> List[EntityProxy]:
-        return [p for p in self.roster if p not in self.on_court]
+        return [p for p in self.roster if p.available and p not in self.on_court]
+
+    def reset_for_new_game(self) -> None:
+        """Clear per-game state (box, fatigue, lineup) while preserving roster
+        identity and injury availability -- used between games of a series."""
+        self.box = {p.id: PlayerStatLine(p.id, p.name, self.side, p.role) for p in self.roster}
+        for p in self.roster:
+            p.fatigue = 0.0
+            p.has_ball = False
+        self.on_court = self._select_starters()
 
     def player_with_ball_role(self) -> EntityProxy:
         """The primary initiator (best ball-handler on the floor)."""
@@ -1004,6 +1021,8 @@ class PossessionEngine:
                    and (fast_break or rng.random() < 0.5))
         matchup_mod = off.play_caller.evaluate_strategic_matchup(defense.play_caller.current_defense)
         matchup_mod -= 0.10 * shooter.fatigue  # tired legs
+        if off.side == "HOME":
+            matchup_mod += self.e.home_court_edge  # home-court effect
         timing_delta = abs(rng.gauss(0.0, self.e.settings.current_profile.shot_timing_window
                                      * (0.5 if contested else 0.25)))
 
@@ -1138,9 +1157,13 @@ class NBAUnifiedEngine:
     """Top-level orchestrator: owns all systems and simulates full games."""
 
     def __init__(self, home: Optional[Team] = None, away: Optional[Team] = None,
-                 seed: Optional[int] = None, difficulty: float = 0.5):
+                 seed: Optional[int] = None, difficulty: float = 0.5,
+                 injury_rate: float = 0.0005, home_court_edge: float = 0.02):
         self.rng: random.Random = random.Random(seed)
         self.settings: GameSettingsManager = GameSettingsManager(difficulty)
+        self.injury_rate: float = max(0.0, injury_rate)
+        # Per-shot probability bonus for the home offense (~NBA home-court effect).
+        self.home_court_edge: float = home_court_edge
         self.game_state: GameState = GameState()
         self.scenarios: GameScenarioEngine = GameScenarioEngine(self.game_state)
         self.play_caller: NBAPlayCaller = NBAPlayCaller()  # shared default (demo compat)
@@ -1154,6 +1177,14 @@ class NBAUnifiedEngine:
         self.home: Optional[Team] = home
         self.away: Optional[Team] = away
         self.play_by_play: List[Dict[str, Any]] = []
+        self.injuries: List[Dict[str, Any]] = []
+
+        # Stepping state (populated by start_game()).
+        self._teams: Dict[str, Team] = {}
+        self._period: int = 0
+        self._pending_fast_break: Optional[str] = None
+        self._second_half_first: str = "AWAY"
+        self._game_over: bool = False
 
     # -- conditioning ----------------------------------------------------------
     def _apply_fatigue(self, on_court: Sequence[EntityProxy], bench: Sequence[EntityProxy],
@@ -1186,54 +1217,138 @@ class NBAUnifiedEngine:
         self.play_by_play.append({"quarter": 1, "event": "JUMP_BALL", "detail": text, "winner": winner.name})
         return side
 
-    def simulate_game(self, verbose: bool = False) -> Dict[str, Any]:
-        if self.home is None or self.away is None:
-            raise ValueError("simulate_game requires both home and away teams.")
-
+    def _begin_period(self, period: int) -> None:
         gs = self.game_state
-        teams = {"HOME": self.home, "AWAY": self.away}
-        gs.possession_side = self._tip_off()
-        second_half_first = "AWAY" if gs.possession_side == "HOME" else "HOME"
+        gs.quarter = period
+        gs.game_clock = OVERTIME_SECONDS if period > 4 else REGULATION_QUARTER_SECONDS
+        gs.reset_period_fouls()
+        # Possession arrow flips to start Q3 (loser of the opening tip).
+        if period == 3:
+            gs.possession_side = self._second_half_first
 
-        period = 1
-        pending_fast_break: Optional[str] = None
+    def start_game(self) -> Dict[str, Any]:
+        """Initialize a steppable game (tip-off + first period). Returns the
+        opening telemetry. Pair with repeated step_possession() calls."""
+        if self.home is None or self.away is None:
+            raise ValueError("start_game requires both home and away teams.")
+        self._teams = {"HOME": self.home, "AWAY": self.away}
+        self.game_state.possession_side = self._tip_off()
+        self._second_half_first = "AWAY" if self.game_state.possession_side == "HOME" else "HOME"
+        self._period = 1
+        self._pending_fast_break = None
+        self._game_over = False
+        self._begin_period(1)
+        return {"event": "TIP_OFF", "quarter": 1,
+                "possession": self.game_state.possession_side, "game_over": False}
+
+    def step_possession(self) -> Dict[str, Any]:
+        """Advance exactly one possession (rolling periods/OT as needed) and
+        return its telemetry. When the game is decided, returns a GAME_OVER
+        payload carrying the final summary."""
+        gs = self.game_state
+        if self._game_over:
+            return {"event": "GAME_OVER", "game_over": True, "summary": self.build_game_summary()}
+
+        # Period rollover / end-of-game gate.
+        if gs.game_clock <= 0:
+            if self._period >= 4 and not gs.is_tied():
+                self._game_over = True
+                return {"event": "GAME_OVER", "game_over": True, "summary": self.build_game_summary()}
+            self._period += 1
+            self._begin_period(self._period)
+
+        off = self._teams[gs.possession_side]
+        defense = self._teams["AWAY" if gs.possession_side == "HOME" else "HOME"]
+
+        # Forfeit guard: a team with no eligible players cannot continue (only
+        # reachable under extreme injury rates; realistic rates never empty a roster).
+        if not off.on_court or not defense.on_court:
+            self._game_over = True
+            summary = self.build_game_summary()
+            summary["forfeit"] = True
+            return {"event": "GAME_OVER", "game_over": True,
+                    "reason": "insufficient_players", "summary": summary}
+
+        fb = self._pending_fast_break == off.side
+        self._pending_fast_break = None
+
+        result = self.possession_engine.simulate_possession(off, defense, fast_break=fb)
+        gs.game_clock = max(0.0, gs.game_clock - result["time_elapsed"])
+
+        self._apply_fatigue(off.on_court, off.bench, off, result["time_elapsed"])
+        self._apply_fatigue(defense.on_court, defense.bench, defense, result["time_elapsed"])
+        self._substitute(off)
+        self._substitute(defense)
+
+        injuries = self._check_injuries((off, defense))
+        if injuries:
+            result.setdefault("events", []).extend(i["event_text"] for i in injuries)
+            result["new_injuries"] = injuries
+
+        self.play_by_play.append(result)
+        if result.get("fast_break_for"):
+            self._pending_fast_break = result["fast_break_for"]
+        if result.get("change_of_possession", True):
+            gs.possession_side = "AWAY" if gs.possession_side == "HOME" else "HOME"
+        result["game_over"] = False
+        return result
+
+    def simulate_game(self, verbose: bool = False) -> Dict[str, Any]:
+        """Run a full game to completion by driving the stepper."""
+        self.start_game()
         while True:
-            gs.quarter = period
-            gs.game_clock = OVERTIME_SECONDS if period > 4 else REGULATION_QUARTER_SECONDS
-            gs.reset_period_fouls()
-            # Possession arrow flips to start Q3 (loser of opening tip).
-            if period == 3:
-                gs.possession_side = second_half_first
+            result = self.step_possession()
+            if result.get("game_over"):
+                return result["summary"]
+            if verbose:
+                self._print_play(result)
 
-            while gs.game_clock > 0:
-                off = teams[gs.possession_side]
-                defense = teams["AWAY" if gs.possession_side == "HOME" else "HOME"]
-                fb = pending_fast_break == off.side
-                pending_fast_break = None
+    # -- injuries --------------------------------------------------------------
+    _INJURY_NOTES = ("rolled ankle", "tweaked hamstring", "jammed finger",
+                     "lower-back tightness", "knee soreness", "shoulder strain",
+                     "hip pointer", "calf cramp")
 
-                result = self.possession_engine.simulate_possession(off, defense, fast_break=fb)
-                gs.game_clock = max(0.0, gs.game_clock - result["time_elapsed"])
+    def _check_injuries(self, teams: Sequence[Team]) -> List[Dict[str, Any]]:
+        if self.injury_rate <= 0.0:
+            return []
+        out: List[Dict[str, Any]] = []
+        for team in teams:
+            for p in list(team.on_court):
+                if not p.available:
+                    continue
+                # Risk rises with fatigue, falls with conditioning (stamina).
+                chance = self.injury_rate * (0.3 + p.fatigue) * (1.0 - 0.3 * (p.rating("stamina") / 100.0))
+                if self.rng.random() < chance:
+                    out.append(self._injure(team, p))
+        return out
 
-                self._apply_fatigue(off.on_court, off.bench, off, result["time_elapsed"])
-                self._apply_fatigue(defense.on_court, defense.bench, defense, result["time_elapsed"])
-                self._substitute(off)
-                self._substitute(defense)
+    def _injure(self, team: Team, player: EntityProxy) -> Dict[str, Any]:
+        gs = self.game_state
+        player.available = False
+        r = self.rng.random()
+        games_out = 0 if r < 0.70 else (1 if r < 0.90 else self.rng.randint(2, 5))
+        player.games_out = games_out
+        note = self.rng.choice(self._INJURY_NOTES)
+        player.injury_note = note
+        self._force_sub(team, player)
+        rec = {"type": "INJURY", "player_id": player.id, "player": player.name,
+               "team": team.name, "quarter": gs.quarter, "clock": _format_clock(gs.game_clock),
+               "note": note, "games_out": games_out,
+               "event_text": f"INJURY: {player.name} ({note}) -- out"}
+        self.injuries.append(rec)
+        return rec
 
-                self.play_by_play.append(result)
-                if verbose:
-                    self._print_play(result)
-
-                if result.get("fast_break_for"):
-                    pending_fast_break = result["fast_break_for"]
-                if result.get("change_of_possession", True):
-                    gs.possession_side = "AWAY" if gs.possession_side == "HOME" else "HOME"
-
-            # End of period: continue to OT if regulation ended tied.
-            if period >= 4 and not gs.is_tied():
-                break
-            period += 1
-
-        return self.build_game_summary()
+    def _force_sub(self, team: Team, injured: EntityProxy) -> None:
+        if injured not in team.on_court:
+            return
+        idx = team.on_court.index(injured)
+        pool = [b for b in team.roster if b.available and b not in team.on_court]
+        if not pool:
+            team.on_court.pop(idx)  # no healthy reserves: play short-handed
+            return
+        same = [b for b in pool if b.role == injured.role]
+        pick = (min(same, key=lambda b: b.fatigue) if same else min(pool, key=lambda b: b.fatigue))
+        team.on_court[idx] = pick
 
     def _print_play(self, r: Dict[str, Any]) -> None:
         if r.get("result") in (None, "DEFENSIVE_REBOUND", "MISS_OREB_NO_SCORE"):
@@ -1265,6 +1380,7 @@ class NBAUnifiedEngine:
             "home": team_block(self.home),
             "away": team_block(self.away),
             "possessions": len(self.play_by_play),
+            "injuries": list(self.injuries),
         }
 
     # -- single-tick demo (preserved & upgraded to return telemetry) -----------
