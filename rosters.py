@@ -33,3 +33,12 @@ def team_name(key: str) -> str:
 
 def all_teams() -> Dict[str, str]:
     return dict(ALL_TEAM_NAMES)
+
+
+def register_team(key: str, name: str, players: List[dict]) -> str:
+    """Add (or replace) a team in the runtime registry so imported teams are
+    usable by key everywhere built-in teams are. Returns the normalized key."""
+    key = key.upper()
+    ALL_ROSTERS[key] = players
+    ALL_TEAM_NAMES[key] = name
+    return key

@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3 uid="uid://bball_player_placeholder"]
+
+[ext_resource type="Script" path="res://Player.gd" id="1_player"]
+
+[sub_resource type="CapsuleMesh" id="cap"]
+radius = 1.1
+height = 6.5
+
+[node name="Player" type="Node3D"]
+script = ExtResource("1_player")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.25, 0)
+mesh = SubResource("cap")
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.0, 0)
+billboard = 1
+pixel_size = 0.03
+font_size = 96
+text = "#0"

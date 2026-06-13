@@ -7,7 +7,7 @@ config_version=5
 [application]
 
 config/name="Bball Sim POC"
-run/main_scene="res://Main.tscn"
+run/main_scene="res://Court3D.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 
 [display]

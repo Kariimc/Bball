@@ -1,0 +1,84 @@
+{
+  "key": "CUST",
+  "name": "Custom City Comets",
+  "players": [
+    {
+      "name": "Floor General",
+      "role": "PG",
+      "height_inches": 75,
+      "stats": {
+        "free_throw": 85, "shot_close": 80, "mid_range": 80, "three_point": 84,
+        "dunk_rating": 58, "vertical_leap": 30, "speed": 88, "stamina": 86,
+        "passing_accuracy": 88, "ball_handle": 90, "physical_strength": 66, "hustle": 82,
+        "perimeter_defense": 80, "interior_defense": 46, "defensive_awareness": 80,
+        "rebounding": 44, "steal": 82, "block": 24
+      }
+    },
+    {
+      "name": "Sharpshooter",
+      "role": "SG",
+      "height_inches": 78,
+      "stats": {
+        "free_throw": 88, "shot_close": 78, "mid_range": 82, "three_point": 90,
+        "dunk_rating": 62, "vertical_leap": 31, "speed": 82, "stamina": 84,
+        "passing_accuracy": 74, "ball_handle": 78, "physical_strength": 66, "hustle": 80,
+        "perimeter_defense": 76, "interior_defense": 48, "defensive_awareness": 78,
+        "rebounding": 46, "steal": 74, "block": 28
+      }
+    },
+    {
+      "name": "Two-Way Wing",
+      "role": "SF",
+      "height_inches": 80,
+      "stats": {
+        "free_throw": 78, "shot_close": 80, "mid_range": 76, "three_point": 78,
+        "dunk_rating": 78, "vertical_leap": 35, "speed": 84, "stamina": 88,
+        "passing_accuracy": 74, "ball_handle": 76, "physical_strength": 78, "hustle": 88,
+        "perimeter_defense": 88, "interior_defense": 66, "defensive_awareness": 86,
+        "rebounding": 64, "steal": 80, "block": 56
+      }
+    },
+    {
+      "name": "Stretch Big",
+      "role": "PF",
+      "height_inches": 82,
+      "stats": {
+        "free_throw": 74, "shot_close": 82, "mid_range": 78, "three_point": 74,
+        "dunk_rating": 80, "vertical_leap": 32, "speed": 74, "stamina": 82,
+        "passing_accuracy": 72, "ball_handle": 64, "physical_strength": 84, "hustle": 84,
+        "perimeter_defense": 74, "interior_defense": 84, "defensive_awareness": 84,
+        "rebounding": 82, "steal": 60, "block": 76
+      }
+    },
+    {
+      "name": "Rim Protector",
+      "role": "C",
+      "height_inches": 84,
+      "stats": {
+        "free_throw": 66, "shot_close": 84, "mid_range": 58, "three_point": 30,
+        "dunk_rating": 86, "vertical_leap": 34, "speed": 66, "stamina": 82,
+        "passing_accuracy": 62, "ball_handle": 48, "physical_strength": 90, "hustle": 86,
+        "perimeter_defense": 58, "interior_defense": 92, "defensive_awareness": 88,
+        "rebounding": 90, "steal": 54, "block": 92
+      }
+    },
+    {
+      "name": "Backup Guard",
+      "role": "PG",
+      "height_inches": 74,
+      "stats": { "three_point": 80, "speed": 84, "ball_handle": 82, "perimeter_defense": 78 }
+    },
+    {
+      "name": "Energy Forward",
+      "role": "SF",
+      "height_inches": 79,
+      "stats": { "hustle": 90, "rebounding": 66, "perimeter_defense": 82, "three_point": 74 }
+    },
+    {
+      "name": "Backup Center",
+      "role": "C",
+      "height_inches": 83,
+      "stats": { "interior_defense": 84, "rebounding": 86, "block": 80, "shot_close": 76 }
+    }
+  ]
+}

@@ -34,6 +34,7 @@ from urllib.parse import urlparse, parse_qs
 from nba_comprehensive_game_engine import NBAUnifiedEngine, build_team
 from rosters import all_teams, get_roster, team_name
 from series import simulate_series, simulate_bracket
+from team_import import import_team_from_url
 
 DEFAULT_HOME = "SAS"
 DEFAULT_AWAY = "DET"
@@ -155,6 +156,17 @@ class _SimHandler(BaseHTTPRequestHandler):
                                  "sessions": len(_SESSIONS)})
             elif route == "/teams":
                 self._send_json({"teams": all_teams()})
+            elif route == "/import":
+                url = self._s(qs, "url", "")
+                if not url:
+                    self._send_json({"error": "missing 'url' parameter"}, status=400)
+                else:
+                    allow_private = self._s(qs, "allow_private", "0").lower() in ("1", "true", "yes")
+                    info = import_team_from_url(
+                        url, allow_private=allow_private,
+                        key=self._s(qs, "key", "") or None,
+                        name=self._s(qs, "name", "") or None)
+                    self._send_json({"imported": info, "teams": all_teams()})
             elif route == "/simulate":
                 self._send_json(run_simulation(
                     seed=self._i(qs, "seed"), difficulty=self._f(qs, "difficulty", 0.6),

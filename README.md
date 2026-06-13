@@ -71,6 +71,33 @@ conditioning. A hurt player is subbed out and may miss future games
 (`games_out`), which `series.py` carries forward across the series. Tune via the
 engine's `injury_rate` (default `0.0005`, ~0.5 in-game injuries/game).
 
+## Import custom teams from a URL
+
+Host a team as JSON anywhere (GitHub raw, a gist, your own server) and pull it in
+by URL. See `examples/team_template.json` for the schema. Imported teams register
+under a key and work everywhere built-ins do (sim, series, bracket).
+
+```bash
+# Validate a file or URL from the CLI
+python team_import.py --file examples/team_template.json
+python team_import.py --url https://example.com/myteam.json
+
+# Or over the service: import, then use the returned key
+curl "http://127.0.0.1:8765/import?url=https://example.com/myteam.json"
+curl "http://127.0.0.1:8765/simulate?home=CUST&away=BOS"
+```
+
+```python
+from team_import import import_team_from_url
+info = import_team_from_url("https://example.com/myteam.json")  # -> {"key": "CUST", ...}
+```
+
+**Security:** importing fetches a user-supplied URL server-side, so the loader
+refuses non-public targets (loopback/private/link-local IPs), caps the response
+size, and times out. Ratings are clamped to valid ranges and unknown stat keys
+are dropped. For trusted local dev (e.g. a localhost JSON), pass
+`allow_private=True` (CLI `--allow-private`, or `&allow_private=1` on `/import`).
+
 ## Two ways for a front end to consume it
 
 **1. Replay (deterministic, simplest).** Fetch a whole game, animate the
@@ -112,9 +139,18 @@ python sim_service.py --once --seed 7 --difficulty 0.7
 ```
 
 **Runnable Godot POC:** with the service running, open the `godot/` folder in
-Godot 4 and press Play — `Main.tscn` drives a live scoreboard + play feed via
-`/start` → `/possession`. `SimClient.gd` supports both replay and live-step
-modes; `Scoreboard.gd` shows how to read the telemetry:
+Godot 4 and press Play. The main scene `Court3D.tscn` shows a 3D court with
+**placeholder capsule players** (5 per team in a half-court set), a scoreboard,
+and a ball that animates to each shooter — all driven live via `/start` →
+`/possession`. (`Main.tscn` is a 2D scoreboard-only alternative.)
+
+> **Swapping in your own 3D models:** assign your character scene to the
+> `player_scene` export on the `Court` node (or replace `Player.tscn`). It only
+> needs a `setup(name, number, color)` method — the controller handles
+> positioning. Court coordinates are in feet; see `Court.gd::_court_to_world()`.
+
+`SimClient.gd` supports both replay and live-step modes; here is the telemetry
+read pattern:
 
 ```gdscript
 @onready var sim: SimClient = $Sim

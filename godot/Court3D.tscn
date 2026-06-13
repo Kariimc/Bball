@@ -1,0 +1,115 @@
+[gd_scene load_steps=8 format=3 uid="uid://bball_court3d"]
+
+[ext_resource type="Script" path="res://Court.gd" id="1_court"]
+[ext_resource type="Script" path="res://SimClient.gd" id="2_sim"]
+
+[sub_resource type="PlaneMesh" id="floor"]
+size = Vector2(50, 94)
+
+[sub_resource type="StandardMaterial3D" id="floor_mat"]
+albedo_color = Color(0.74, 0.55, 0.34, 1)
+
+[sub_resource type="SphereMesh" id="ball_mesh"]
+radius = 0.8
+height = 1.6
+
+[sub_resource type="StandardMaterial3D" id="ball_mat"]
+albedo_color = Color(0.92, 0.45, 0.13, 1)
+
+[sub_resource type="BoxMesh" id="hoop_mesh"]
+size = Vector3(6, 1, 0.5)
+
+[node name="Court" type="Node3D"]
+script = ExtResource("1_court")
+
+[node name="Sim" type="Node" parent="."]
+script = ExtResource("2_sim")
+
+[node name="StepTimer" type="Timer" parent="."]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 60, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 72, 96)
+fov = 60.0
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+mesh = SubResource("floor")
+surface_material_override/0 = SubResource("floor_mat")
+
+[node name="HoopNear" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, -42)
+mesh = SubResource("hoop_mesh")
+
+[node name="HoopFar" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 42)
+mesh = SubResource("hoop_mesh")
+
+[node name="Ball" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+mesh = SubResource("ball_mesh")
+surface_material_override/0 = SubResource("ball_mat")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Quarter" type="Label" parent="UI"]
+offset_left = 544.0
+offset_top = 16.0
+offset_right = 616.0
+offset_bottom = 48.0
+theme_override_font_sizes/font_size = 26
+text = "Q1"
+horizontal_alignment = 1
+
+[node name="Clock" type="Label" parent="UI"]
+offset_left = 500.0
+offset_top = 50.0
+offset_right = 652.0
+offset_bottom = 96.0
+theme_override_font_sizes/font_size = 34
+text = "12:00"
+horizontal_alignment = 1
+
+[node name="AwayName" type="Label" parent="UI"]
+offset_left = 60.0
+offset_top = 30.0
+offset_right = 360.0
+offset_bottom = 62.0
+theme_override_font_sizes/font_size = 22
+text = "AWAY"
+
+[node name="AwayScore" type="Label" parent="UI"]
+offset_left = 60.0
+offset_top = 62.0
+offset_right = 360.0
+offset_bottom = 140.0
+theme_override_font_sizes/font_size = 64
+text = "0"
+
+[node name="HomeName" type="Label" parent="UI"]
+offset_left = 792.0
+offset_top = 30.0
+offset_right = 1092.0
+offset_bottom = 62.0
+theme_override_font_sizes/font_size = 22
+text = "HOME"
+horizontal_alignment = 2
+
+[node name="HomeScore" type="Label" parent="UI"]
+offset_left = 792.0
+offset_top = 62.0
+offset_right = 1092.0
+offset_bottom = 140.0
+theme_override_font_sizes/font_size = 64
+text = "0"
+horizontal_alignment = 2
+
+[node name="PlayFeed" type="RichTextLabel" parent="UI"]
+offset_left = 16.0
+offset_top = 470.0
+offset_right = 1136.0
+offset_bottom = 640.0
+bbcode_enabled = true
+scroll_following = true
