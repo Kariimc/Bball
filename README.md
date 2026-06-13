@@ -13,6 +13,8 @@ Season lens: **2004-05 NBA Finals — San Antonio Spurs vs. Detroit Pistons.**
 |------|---------|
 | `nba_comprehensive_game_engine.py` | The engine: enums, vector math, entities, AI, possession + full-game simulation. |
 | `rosters_2005.py` | Pure roster data for the 2004-05 Spurs & Pistons (archetype-approximated ratings). |
+| `sim_service.py` | Stdlib HTTP / subprocess transport that exposes the engine to a front end (e.g. Godot). |
+| `godot/SimClient.gd` | Godot 4 client that fetches a game and replays its telemetry. |
 | `tests/test_engine.py` | 36-test regression suite (stdlib `unittest`). |
 
 ## Quick start
@@ -40,6 +42,37 @@ summary = engine.simulate_game(verbose=False)
 print(summary["final_score"])          # {'HOME': ..., 'AWAY': ...}
 print(summary["home"]["players"][0])   # leading scorer's full box line
 # engine.play_by_play -> list of serializable possession telemetry dicts
+```
+
+## Front-end integration (Godot via Python sim service)
+
+The engine is headless Python; Godot renders. Because every game is
+deterministic, the pattern is **fetch once, replay locally** — Godot pulls a
+full game and animates the `play_by_play` array at its own pace, driving the
+scoreboard/clock from the telemetry fields. No per-frame round trips.
+
+```bash
+# Start the sim service (stdlib only, no Flask/FastAPI)
+python sim_service.py --port 8765
+
+#   GET /health
+#   GET /teams
+#   GET /simulate?seed=2005&difficulty=0.7&home=SAS&away=DET
+
+# Or one-shot subprocess mode (Godot OS.execute):
+python sim_service.py --once --seed 7 --difficulty 0.7
+```
+
+On the Godot side, attach `godot/SimClient.gd` to a node:
+
+```gdscript
+var sim := SimClient.new()  # the script auto-creates its HTTPRequest child
+add_child(sim)
+sim.game_loaded.connect(func(summary): sim.replay())
+sim.possession_played.connect(func(play):
+    $Scoreboard.set_clock(play["clock"])
+    $Scoreboard.set_score(play["score"]["HOME"], play["score"]["AWAY"]))
+sim.simulate(2005, 0.7, "SAS", "DET")
 ```
 
 ## Design
