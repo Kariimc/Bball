@@ -38,9 +38,43 @@ namespace Shift9.Integration
             Id = p.Id,
             Name = p.Name,
             Number = p.Number,
-            Attributes = ToAttributeProfile(p.Attributes),
+            Attributes = ResolveAttributes(p),
             Dynamics = PlayerDynamics.Default
         };
+
+        /// <summary>
+        /// A player's ratings: derived from box-score stats via <see cref="AttributeFormula"/> when
+        /// stats are supplied, otherwise the explicit imported attributes.
+        /// </summary>
+        public static AttributeProfile ResolveAttributes(RuntimePlayer p)
+        {
+            if (p.Stats != null) return AttributeFormula.FromStats(ToPlayerStats(p.Stats));
+            return ToAttributeProfile(p.Attributes);
+        }
+
+        public static PlayerStats ToPlayerStats(RuntimeStats s) => new PlayerStats
+        {
+            Points = s.Points, FieldGoalPct = s.FieldGoalPct, ThreePtPct = s.ThreePtPct,
+            ThreePtAtt = s.ThreePtAtt, FreeThrowPct = s.FreeThrowPct, Assists = s.Assists,
+            Turnovers = s.Turnovers, Rebounds = s.Rebounds, OffRebounds = s.OffRebounds,
+            Blocks = s.Blocks, Steals = s.Steals, HeightInches = s.HeightInches, WeightLbs = s.WeightLbs
+        };
+
+        /// <summary>
+        /// The five attribute profiles a game uses for a team — its first five players (stats-derived
+        /// where stats were supplied). Short rosters are filled with a neutral 70 so a game can start.
+        /// </summary>
+        public static AttributeProfile[] StartingFive(RuntimeTeam team)
+        {
+            const int five = 5;
+            var roster = new AttributeProfile[five];
+            for (int i = 0; i < five; i++)
+            {
+                bool hasPlayer = team?.Players != null && i < team.Players.Count;
+                roster[i] = hasPlayer ? ResolveAttributes(team.Players[i]) : AttributeProfile.Uniform(70);
+            }
+            return roster;
+        }
 
         public static SimTeam ToSimTeam(RuntimeTeam t)
         {

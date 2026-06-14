@@ -51,7 +51,8 @@ namespace Shift9.Customization.Mapping
                         team.Players.Add(new RuntimePlayer
                         {
                             Id = p.Id, Name = p.Name, Number = p.Number,
-                            Attributes = MapAttributes(p.Attributes)
+                            Attributes = MapAttributes(p.Attributes),
+                            Stats = MapStats(p.Stats)
                         });
 
                 league.Teams.Add(team);
@@ -79,6 +80,18 @@ namespace Shift9.Customization.Mapping
             byte g = (byte)Convert.ToInt32(hex.Substring(3, 2), 16);
             byte b = (byte)Convert.ToInt32(hex.Substring(5, 2), 16);
             return new Color32(r, g, b, 255);
+        }
+
+        private static RuntimeStats MapStats(StatsBlock s)
+        {
+            if (s == null) return null;
+            return new RuntimeStats
+            {
+                Points = s.Points, FieldGoalPct = s.FieldGoalPct, ThreePtPct = s.ThreePtPct,
+                ThreePtAtt = s.ThreePtAtt, FreeThrowPct = s.FreeThrowPct, Assists = s.Assists,
+                Turnovers = s.Turnovers, Rebounds = s.Rebounds, OffRebounds = s.OffRebounds,
+                Blocks = s.Blocks, Steals = s.Steals, HeightInches = s.HeightInches, WeightLbs = s.WeightLbs
+            };
         }
 
         private static RuntimeAttributes MapAttributes(AttributeBlock a)

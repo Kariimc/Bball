@@ -73,6 +73,26 @@ namespace Shift9.Customization.Model
         [JsonProperty("name")]       public string Name;
         [JsonProperty("number")]     public int Number;
         [JsonProperty("attributes")] public AttributeBlock Attributes;
+        [JsonProperty("stats")]      public StatsBlock Stats; // optional: derive attributes from these
+    }
+
+    /// <summary>Optional box-score stats; when present the engine derives ratings from them.</summary>
+    [Serializable]
+    public sealed class StatsBlock
+    {
+        [JsonProperty("points")]       public float Points;
+        [JsonProperty("fieldGoalPct")] public float FieldGoalPct;
+        [JsonProperty("threePtPct")]   public float ThreePtPct;
+        [JsonProperty("threePtAtt")]   public float ThreePtAtt;
+        [JsonProperty("freeThrowPct")] public float FreeThrowPct;
+        [JsonProperty("assists")]      public float Assists;
+        [JsonProperty("turnovers")]    public float Turnovers;
+        [JsonProperty("rebounds")]     public float Rebounds;
+        [JsonProperty("offRebounds")]  public float OffRebounds;
+        [JsonProperty("blocks")]       public float Blocks;
+        [JsonProperty("steals")]       public float Steals;
+        [JsonProperty("heightInches")] public float HeightInches;
+        [JsonProperty("weightLbs")]    public float WeightLbs;
     }
 
     /// <summary>

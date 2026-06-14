@@ -55,6 +55,19 @@ namespace Shift9.Customization.Mapping
         public string Name;
         public int Number;
         public RuntimeAttributes Attributes;
+        public RuntimeStats Stats; // optional: when present, attributes are derived from these
+    }
+
+    /// <summary>
+    /// Optional box-score stats for a player. When supplied, the engine bridge derives the 0..99
+    /// ratings from these via the attribute formula instead of using explicit <see cref="RuntimeAttributes"/>.
+    /// Kept local so this assembly does not hard-depend on the sim engine.
+    /// </summary>
+    public sealed class RuntimeStats
+    {
+        public float Points, FieldGoalPct, ThreePtPct, ThreePtAtt, FreeThrowPct;
+        public float Assists, Turnovers, Rebounds, OffRebounds, Blocks, Steals;
+        public float HeightInches, WeightLbs;
     }
 
     /// <summary>
