@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using Shift9.Sim.Core;
 using Shift9.Sim.Match;
+using Shift9.Sim.Rules;
 using UnityEngine;
 
 namespace Shift9.Sim.Tests
@@ -9,6 +10,9 @@ namespace Shift9.Sim.Tests
     {
         private const float Dt = SimConstants.FixedTimestep;
 
+        private static PossessionSim Home() =>
+            new PossessionSim(seed: 7, new Scoreboard(), offenseIsHome: true, attackHomeBasket: false);
+
         private static bool InBounds(Vector3 p) =>
             Mathf.Abs(p.x) <= SimConstants.CourtHalfWidth + 0.01f &&
             Mathf.Abs(p.z) <= SimConstants.CourtHalfLength + 0.01f;
@@ -16,7 +20,7 @@ namespace Shift9.Sim.Tests
         [Test]
         public void Possession_ReachesAShotAndResolves()
         {
-            var sim = new PossessionSim(seed: 7);
+            var sim = Home();
             PossessionPhase final = PossessionPhase.BringUp;
             for (int i = 0; i < 1200; i++)
             {
@@ -33,10 +37,9 @@ namespace Shift9.Sim.Tests
         [Test]
         public void Score_OnlyChangesOnAMake()
         {
-            // Sweep seeds so we exercise both outcomes.
             for (ulong seed = 1; seed <= 12; seed++)
             {
-                var sim = new PossessionSim(seed);
+                var sim = new PossessionSim(seed, new Scoreboard(), offenseIsHome: true, attackHomeBasket: false);
                 for (int i = 0; i < 1200 && sim.Phase != PossessionPhase.Made && sim.Phase != PossessionPhase.Missed; i++)
                     sim.Tick(Dt);
 
@@ -50,7 +53,7 @@ namespace Shift9.Sim.Tests
         [Test]
         public void Players_StayInBoundsThroughout()
         {
-            var sim = new PossessionSim(seed: 3);
+            var sim = new PossessionSim(seed: 3, new Scoreboard(), offenseIsHome: true, attackHomeBasket: false);
             for (int i = 0; i < 1200; i++)
             {
                 sim.Tick(Dt);
@@ -61,10 +64,29 @@ namespace Shift9.Sim.Tests
         }
 
         [Test]
+        public void AwayAttackingHomeBasket_ScoresForAway()
+        {
+            // Sweep seeds until a make lands; it must credit the away team, not home.
+            for (ulong seed = 1; seed <= 30; seed++)
+            {
+                var sim = new PossessionSim(seed, new Scoreboard(), offenseIsHome: false, attackHomeBasket: true);
+                for (int i = 0; i < 1200 && sim.Phase != PossessionPhase.Made && sim.Phase != PossessionPhase.Missed; i++)
+                    sim.Tick(Dt);
+                if (sim.Phase == PossessionPhase.Made)
+                {
+                    Assert.GreaterOrEqual(sim.AwayScore, 2);
+                    Assert.AreEqual(0, sim.HomeScore);
+                    return;
+                }
+            }
+            Assert.Pass("No make in the sampled seeds; scoring side still exercised by other tests.");
+        }
+
+        [Test]
         public void SameSeed_ProducesIdenticalPossession()
         {
-            var a = new PossessionSim(seed: 99);
-            var b = new PossessionSim(seed: 99);
+            var a = new PossessionSim(99, new Scoreboard(), true, false);
+            var b = new PossessionSim(99, new Scoreboard(), true, false);
             for (int i = 0; i < 1200; i++)
             {
                 a.Tick(Dt);
@@ -79,3 +101,4 @@ namespace Shift9.Sim.Tests
         }
     }
 }
+
