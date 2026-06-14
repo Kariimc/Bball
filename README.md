@@ -10,7 +10,27 @@ No duplicated code: the game imports its vector math from the engine, its court
 geometry/scoring from `court_rules.py`, and its teams from the shared roster
 registry — so one change propagates everywhere.
 
-## Play it
+## Play on your phone (no install, no server)
+
+`web/bball.html` is a **single self-contained file** — the whole game in one
+HTML file, no downloads, no internet, no server. Put it on your Android phone
+and tap it; it opens in your browser and plays offline. Easiest ways to get it
+onto the phone:
+
+- Email `web/bball.html` to yourself and open the attachment in Chrome, **or**
+- Save it to your phone's Downloads and tap it in the Files app (opens in browser).
+
+Turn the phone **sideways (landscape)**. Drag the **left** side to move; the
+**SHOOT / PASS / STEAL** buttons are on the right. Tap a half of the menu to pick
+teams, then TIP OFF. You always control the green (HOME) ball-handler. The full
+cast is on screen and reacts: crowd + momentum meter, mascot, cheerleaders,
+coaches (flash when they argue a call), referees (flash on a whistle), and a
+camera that flashes on big baskets. Same teams/players as the desktop game.
+
+> This web build is a standalone version (phones can't run the Python directly
+> without a server). The desktop `voxel_hoops.py` remains the full game.
+
+## Play it (desktop)
 
 ```bash
 pip install pygame

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#121218">
+<title>Voxel Hoops — Pocket Edition</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; background:#0d0d12; overflow:hidden; touch-action:none;
+              font-family: ui-monospace, "Courier New", monospace; color:#eee; }
+  #wrap { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  canvas { width:100%; height:100%; object-fit:contain; display:block; background:#0d0d12; }
+  #rotate { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+            background:#0d0d12; text-align:center; padding:24px; font-size:18px; z-index:10; }
+  @media (orientation:portrait){ #rotate{ display:flex; } }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv" width="960" height="600"></canvas></div>
+<div id="rotate">↻ Rotate your phone sideways (landscape) for the best view.<br><br>Tap once you've rotated.</div>
+<script>
+"use strict";
+// ============================================================================
+// Voxel Hoops — Pocket Edition. Single self-contained file. No network, no
+// install. A standalone web version of the game showing the full cast (players,
+// refs, crowd, mascot, cheerleaders, coaches, camera) reacting to play.
+// ============================================================================
+
+// --- team data (exported from the Python rosters; same names/ratings) -------
+const TEAMS = {"SAS":{"name":"San Antonio Spurs","players":[{"n":"Tony Parker","r":"PG","sp":9,"vt":6,"st":7,"sh":7},{"n":"Manu Ginobili","r":"SG","sp":9,"vt":7,"st":9,"sh":8},{"n":"Bruce Bowen","r":"SF","sp":7,"vt":5,"st":7,"sh":6},{"n":"Tim Duncan","r":"PF","sp":7,"vt":6,"st":5,"sh":6},{"n":"Rasho Nesterovic","r":"C","sp":6,"vt":4,"st":4,"sh":5}]},"DET":{"name":"Detroit Pistons","players":[{"n":"Chauncey Billups","r":"PG","sp":8,"vt":5,"st":7,"sh":8},{"n":"Richard Hamilton","r":"SG","sp":9,"vt":6,"st":7,"sh":8},{"n":"Tayshaun Prince","r":"SF","sp":8,"vt":6,"st":7,"sh":7},{"n":"Rasheed Wallace","r":"PF","sp":7,"vt":5,"st":6,"sh":8},{"n":"Ben Wallace","r":"C","sp":7,"vt":7,"st":7,"sh":4}]},"BOS":{"name":"Boston Shamrocks","players":[{"n":"Marcus Vane","r":"PG","sp":9,"vt":6,"st":8,"sh":8},{"n":"Eli Brookhart","r":"SG","sp":8,"vt":7,"st":8,"sh":8},{"n":"Darius Kohl","r":"SF","sp":8,"vt":7,"st":8,"sh":8},{"n":"Aleksei Trent","r":"PF","sp":7,"vt":6,"st":6,"sh":8},{"n":"Quentin Maddox","r":"C","sp":7,"vt":6,"st":5,"sh":6}]},"DEN":{"name":"Denver Altitude","players":[{"n":"Jamal Reese","r":"PG","sp":8,"vt":5,"st":8,"sh":8},{"n":"Cole Whitman","r":"SG","sp":8,"vt":5,"st":7,"sh":8},{"n":"Andre Boll","r":"SF","sp":8,"vt":6,"st":8,"sh":8},{"n":"Viktor Lund","r":"PF","sp":7,"vt":6,"st":6,"sh":7},{"n":"Niko Petrov","r":"C","sp":6,"vt":5,"st":7,"sh":8}]},"OKC":{"name":"Oklahoma Thunderbirds","players":[{"n":"Khari Dunn","r":"PG","sp":9,"vt":7,"st":9,"sh":8},{"n":"Tobias Reyna","r":"SG","sp":9,"vt":7,"st":9,"sh":8},{"n":"Jaylen Frost","r":"SF","sp":9,"vt":8,"st":9,"sh":8},{"n":"Mason Akers","r":"PF","sp":8,"vt":7,"st":7,"sh":7},{"n":"Ivo Senga","r":"C","sp":7,"vt":7,"st":6,"sh":6}]},"MIL":{"name":"Milwaukee Voltage","players":[{"n":"Bryce Calloway","r":"PG","sp":8,"vt":5,"st":7,"sh":8},{"n":"Tre Vincent","r":"SG","sp":8,"vt":6,"st":8,"sh":8},{"n":"Will Hargrove","r":"SF","sp":8,"vt":6,"st":8,"sh":7},{"n":"Goran Mensah","r":"PF","sp":9,"vt":9,"st":7,"sh":7},{"n":"Dejan Pavic","r":"C","sp":7,"vt":6,"st":5,"sh":6}]},"DAL":{"name":"Dallas Lone Stars","players":[{"n":"Luca Marchetti","r":"PG","sp":8,"vt":5,"st":7,"sh":9},{"n":"Kobe Sloan","r":"SG","sp":9,"vt":5,"st":8,"sh":8},{"n":"Pierce Dolan","r":"SF","sp":8,"vt":6,"st":8,"sh":7},{"n":"Omar Said","r":"PF","sp":8,"vt":7,"st":6,"sh":7},{"n":"Dragan Iliev","r":"C","sp":7,"vt":7,"st":6,"sh":6}]},"MIN":{"name":"Minnesota Tundra","players":[{"n":"Deshawn Pruitt","r":"PG","sp":9,"vt":5,"st":8,"sh":8},{"n":"Andre Kovac","r":"SG","sp":9,"vt":8,"st":8,"sh":8},{"n":"Caleb Murton","r":"SF","sp":8,"vt":6,"st":8,"sh":7},{"n":"Nikolai Aas","r":"PF","sp":7,"vt":6,"st":6,"sh":7},{"n":"Petros Anan","r":"C","sp":7,"vt":7,"st":6,"sh":7}]}};
+const KEYS = Object.keys(TEAMS);
+
+// --- constants (court in feet) ----------------------------------------------
+const W=960, H=600;
+const CL=94, CW=50;                       // court length / width (feet)
+const X0=70, X1=890, Y0=100, Y1=500;      // court draw rect (px)
+const HOME_HOOP={x:90,y:25}, AWAY_HOOP={x:4,y:25};
+const THREE=22, DUNK_RNG=18, SHOOT_RNG=24;
+const QSEC=120, OTSEC=60, NQ=4;
+const FORM={home:{PG:[66,25],SG:[74,13],SF:[74,37],PF:[82,18],C:[85,32]},
+            away:{PG:[28,25],SG:[20,13],SF:[20,37],PF:[12,18],C:[9,32]}};
+
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+function cx(x){ return X0+(x/CL)*(X1-X0); }
+function cy(y){ return Y0+(y/CW)*(Y1-Y0); }
+function dist(ax,ay,bx,by){ return Math.hypot(ax-bx,ay-by); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function makeProb(sh,d,contested){
+  let base = d<8?0.60 : d<THREE?0.44 : 0.36;
+  base += (sh-5)*0.025; if(contested) base-=0.15;
+  return clamp(base,0.05,0.95);
+}
+function pointVal(x,y,team){ const h=team==="home"?HOME_HOOP:AWAY_HOOP; return dist(x,y,h.x,h.y)>=THREE?3:2; }
+function fmtClock(s){ s=Math.max(0,Math.floor(s)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+
+// --- game state -------------------------------------------------------------
+let G=null, scene="menu", menuHome=2, menuAway=3;
+
+function makeTeam(key, side){
+  const t=TEAMS[key]; const order=["PG","SG","SF","PF","C"];
+  return t.players.map((p,i)=>{
+    const spot = FORM[side][p.r] || [side==="home"?32:62, 8+i*9];
+    return {name:p.n, role:p.r, team:side, sp:p.sp, vt:p.vt, st:p.st, sh:p.sh,
+            x:spot[0]+(side==="home"?-30:30), y:spot[1], vx:0, vy:0, cd:0, stun:0, mark:null};
+  });
+}
+
+function setupMatch(hk, ak){
+  const home=makeTeam(hk,"home"), away=makeTeam(ak,"away");
+  for(let i=0;i<home.length;i++) home[i].mark=away[Math.min(i,away.length-1)];
+  for(let i=0;i<away.length;i++) away[i].mark=home[Math.min(i,home.length-1)];
+  G={ homeKey:hk, awayKey:ak, homeName:TEAMS[hk].name, awayName:TEAMS[ak].name,
+      home, away, players:home.concat(away),
+      ball:{x:47,y:25,z:9,held:false,handler:null,shot:null,vx:0,vy:0},
+      controlled:home[0], sh:0, sa:0, q:1, clock:QSEC, shotClock:24, over:false,
+      banner:"", bannerT:0, flash:0, momentum:0.5, run:0,
+      crowdJump:0, mascotBounce:0, coachFlash:{home:0,away:0}, camMode:"BALL",
+      refs:[{x:47,y:6},{x:30,y:44},{x:64,y:44}] };
+  scene="play";
+}
+
+// --- input (touch + keyboard) ----------------------------------------------
+const keys={};
+const stick={active:false,id:null,ox:0,oy:0,x:0,y:0};
+const btns={shoot:{x:W-72,y:H-70,r:46,t:"SHOOT"},pass:{x:W-168,y:H-54,r:36,t:"PASS"},steal:{x:W-66,y:H-176,r:36,t:"STEAL"}};
+let pressShoot=false, pressPass=false, pressSteal=false;
+
+function canvasPos(t){ const r=cv.getBoundingClientRect(); return {x:(t.clientX-r.left)*(W/r.width), y:(t.clientY-r.top)*(H/r.height)}; }
+function inBtn(p,b){ return dist(p.x,p.y,b.x,b.y)<=b.r+6; }
+
+function onTouchStart(e){
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    const p=canvasPos(t);
+    if(scene==="menu"){ handleMenuTap(p); return; }
+    if(scene==="over"){ scene="menu"; return; }
+    if(inBtn(p,btns.shoot)) { pressShoot=true; doAction(); }
+    else if(inBtn(p,btns.pass)) { pressPass=true; doPass(); }
+    else if(inBtn(p,btns.steal)) { pressSteal=true; doSteal(); }
+    else if(p.x < W*0.55 && !stick.active){ stick.active=true; stick.id=t.identifier; stick.ox=p.x; stick.oy=p.y; stick.x=p.x; stick.y=p.y; }
+  }
+}
+function onTouchMove(e){
+  e.preventDefault();
+  for(const t of e.changedTouches){ if(t.identifier===stick.id){ const p=canvasPos(t); stick.x=p.x; stick.y=p.y; } }
+}
+function onTouchEnd(e){
+  e.preventDefault();
+  for(const t of e.changedTouches){ if(t.identifier===stick.id){ stick.active=false; stick.id=null; } }
+}
+cv.addEventListener("touchstart",onTouchStart,{passive:false});
+cv.addEventListener("touchmove",onTouchMove,{passive:false});
+cv.addEventListener("touchend",onTouchEnd,{passive:false});
+cv.addEventListener("touchcancel",onTouchEnd,{passive:false});
+// mouse (desktop testing)
+cv.addEventListener("mousedown",e=>onTouchStart({preventDefault(){},changedTouches:[{clientX:e.clientX,clientY:e.clientY,identifier:"m"}]}));
+window.addEventListener("mouseup",e=>onTouchEnd({preventDefault(){},changedTouches:[{identifier:"m"}]}));
+window.addEventListener("keydown",e=>{ keys[e.key.toLowerCase()]=true;
+  if(scene==="menu"){ if(e.key==="ArrowLeft")menuHome=(menuHome+KEYS.length-1)%KEYS.length;
+    if(e.key==="ArrowRight")menuHome=(menuHome+1)%KEYS.length;
+    if(e.key==="ArrowUp")menuAway=(menuAway+KEYS.length-1)%KEYS.length;
+    if(e.key==="ArrowDown")menuAway=(menuAway+1)%KEYS.length;
+    if(e.key==="Enter")setupMatch(KEYS[menuHome],KEYS[menuAway]); }
+  else if(scene==="over" && e.key.toLowerCase()==="r"){ scene="menu"; }
+  else if(scene==="play"){ if(e.key.toLowerCase()==="j")doAction(); if(e.key.toLowerCase()==="k")doPass(); if(e.key.toLowerCase()==="l")doSteal(); }
+});
+window.addEventListener("keyup",e=>{ keys[e.key.toLowerCase()]=false; });
+
+function handleMenuTap(p){
+  // top half cycles home, bottom half cycles away; center button starts
+  if(dist(p.x,p.y,W/2,H-90)<70){ setupMatch(KEYS[menuHome],KEYS[menuAway]); return; }
+  if(p.x<W/2) menuHome=(menuHome+1)%KEYS.length; else menuAway=(menuAway+1)%KEYS.length;
+}
+
+// --- gameplay helpers -------------------------------------------------------
+function teammates(t){ return t==="home"?G.home:G.away; }
+function opponents(t){ return t==="home"?G.away:G.home; }
+function nearest(arr,x,y){ let b=arr[0],bd=1e9; for(const p of arr){ const d=dist(p.x,p.y,x,y); if(d<bd){bd=d;b=p;} } return b; }
+function nearestOppDist(e){ const o=nearest(opponents(e.team),e.x,e.y); return dist(e.x,e.y,o.x,o.y); }
+function targetHoop(t){ return t==="home"?HOME_HOOP:AWAY_HOOP; }
+
+function updateControl(){
+  if(G.ball.handler && G.ball.handler.team==="home") G.controlled=G.ball.handler;
+  else G.controlled=nearest(G.home,G.ball.x,G.ball.y);
+}
+function giveBall(p){ G.ball.held=true; G.ball.handler=p; G.ball.shot=null; G.shotClock=24; }
+
+function doAction(){
+  if(scene!=="play"||G.over) return; const c=G.controlled, b=G.ball;
+  if(b.held && b.handler===c){
+    const h=targetHoop("home"), d=dist(c.x,c.y,h.x,h.y);
+    if(d<DUNK_RNG && c.vt>=7 && nearestOppDist(c)>3) startDunk(c);
+    else launchShot(c, nearestOppDist(c)<4.5);
+  } else if(dist(c.x,c.y,b.x,b.y)<6 && b.z<5 && !b.shot){ giveBall(c); }
+}
+function doPass(){
+  if(scene!=="play"||G.over) return; const c=G.controlled, b=G.ball;
+  if(!(b.held && b.handler===c)) return;
+  const h=targetHoop("home"); const mates=G.home.filter(m=>m!==c);
+  if(mates.length){ giveBall(nearest(mates,h.x,h.y)); }
+}
+function doSteal(){
+  if(scene!=="play"||G.over) return; const c=G.controlled, b=G.ball;
+  if(!b.held || !b.handler || b.handler.team==="home") return;
+  if(dist(c.x,c.y,b.handler.x,b.handler.y)<7){
+    if(Math.random()<0.2+c.st*0.05){ b.handler.stun=0.7; giveBall(c); banner(c.name+" STEAL!"); }
+    else if(Math.random()<0.12){ foul("home", b.handler); }   // reach-in foul
+  }
+}
+
+function launchShot(sh, contested){
+  const h=targetHoop(sh.team), d=dist(sh.x,sh.y,h.x,h.y);
+  const made=Math.random()<makeProb(sh.sh,d,contested);
+  const pts=pointVal(sh.x,sh.y,sh.team);
+  const dur=0.55+d*0.02, peak=18+d*0.7;
+  const tx = made? h.x : h.x+(Math.random()*7-3.5);
+  const ty = made? h.y : h.y+(Math.random()*7-3.5);
+  sh.cd=0.8;
+  G.ball.shot={sx:sh.x,sy:sh.y,tx,ty,t:0,dur,peak,made,team:sh.team,pts,shooter:sh};
+  G.ball.held=false; G.ball.handler=null; G.camMode="BALL";
+}
+function startDunk(sh){ sh.dunk=0.5; sh.dunkTeam=sh.team; G.ball.held=true; G.ball.handler=sh; }
+
+function award(team,pts,who){
+  if(team==="home"){ G.sh+=pts; G.run=G.run>=0?G.run+pts:pts; } else { G.sa+=pts; G.run=G.run<=0?G.run-pts:-pts; }
+  banner((who?who.name:team)+" +"+pts+(pts>=3?"  THREE!":""));
+  react_score(team,pts);
+  resetCenter();
+}
+function resetCenter(){ const b=G.ball; b.held=false; b.handler=null; b.shot=null; b.x=47; b.y=25; b.z=9; b.vx=0; b.vy=0; G.shotClock=24; }
+function banner(txt){ G.banner=txt; G.bannerT=1.4; }
+
+function foul(onTeam, fouler){
+  // free throws for fouled team's controlled-ish shooter (simple auto-resolve)
+  const shooterTeam = onTeam; const shooter = shooterTeam==="home"? G.controlled : nearest(G.away,fouler?fouler.x:47,fouler?fouler.y:25);
+  G.refs[0].whistle=0.8; G.coachFlash[fouler?fouler.team:(onTeam==="home"?"away":"home")]=1.0;
+  let made=0; for(let i=0;i<2;i++){ if(Math.random()<shooter.sh*0.09+0.1) made++; }
+  if(shooterTeam==="home") G.sh+=made; else G.sa+=made;
+  banner("FOUL — "+shooter.name+" "+made+"/2 FT");
+  resetCenter();
+}
+
+function steer(e,tx,ty){
+  const dx = tx>e.x+0.6?1:(tx<e.x-0.6?-1:0);
+  const dy = ty>e.y+0.6?1:(ty<e.y-0.6?-1:0);
+  moveEnt(e,dx,dy);
+}
+function moveEnt(e,dx,dy){
+  if(e.stun>0||e.dunk>0) return;
+  const sp=0.6+e.sp/20; e.vx=dx*sp; e.vy=dy*sp;
+}
+
+function aiWithBall(e){
+  const h=targetHoop(e.team), d=dist(e.x,e.y,h.x,h.y), contested=nearestOppDist(e)<4.5;
+  if(d<DUNK_RNG && e.vt>=7 && !contested && Math.random()<0.04){ startDunk(e); return; }
+  if(d<SHOOT_RNG && e.cd<=0){
+    const ch=contested?0.012:0.02;
+    if(Math.random()<ch){ launchShot(e,contested); return; }
+    if(contested && Math.random()<0.04){ const m=teammates(e.team).filter(x=>x!==e&&x.stun<=0); if(m.length) giveBall(nearest(m,h.x,h.y)); return; }
+  }
+  steer(e,h.x,h.y);
+}
+function aiDefend(e,handler){
+  const b=targetHoop(handler.team), m=e.mark||handler;
+  steer(e, m.x*0.6+b.x*0.4, m.y*0.6+b.y*0.4);
+  if(m===handler && dist(e.x,e.y,handler.x,handler.y)<3.5 && Math.random()<0.008+e.st*0.003){ handler.stun=0.6; giveBall(e); }
+}
+function ai(e){
+  if(e===G.controlled || e.stun>0 || e.dunk>0 || e.cd>0.6) return;
+  const b=G.ball, loose=(!b.held)||b.shot;
+  const mates=teammates(e.team);
+  if(loose){ if(e===nearest(mates,b.x,b.y)) steer(e,b.x,b.y); else steer(e,...FORM[e.team][e.role]); return; }
+  if(b.handler.team===e.team){ if(b.handler===e) aiWithBall(e); else steer(e,...FORM[e.team][e.role]); }
+  else aiDefend(e,b.handler);
+}
+
+// --- reactions (the cast) ---------------------------------------------------
+function react_score(team,pts){
+  G.flash=0.4; G.mascotBounce=1.0; G.camMode="CELEBRATE";
+  const tgt = 0.5 + clamp((G.sh-G.sa)*0.02 + G.run*0.03, -0.45,0.45);
+  G.momentum += (tgt-G.momentum)*0.5;
+  if(team==="home"){ G.crowdJump=1.0; }
+}
+
+// --- update -----------------------------------------------------------------
+function update(dt){
+  if(scene!=="play"||G.over){ return; }
+  G.clock-=dt;
+  if(G.clock<=0){ endPeriod(); return; }
+  G.shotClock-=dt;
+  if(G.shotClock<=0 && !G.ball.shot){ G.refs[0].whistle=0.8; banner("SHOT CLOCK"); const t=(G.ball.handler&&G.ball.handler.team)||"home"; resetCenter(); }
+
+  // timers
+  if(G.bannerT>0) G.bannerT-=dt;
+  if(G.flash>0) G.flash-=dt*2;
+  if(G.crowdJump>0) G.crowdJump-=dt*1.5;
+  if(G.mascotBounce>0) G.mascotBounce-=dt*1.5;
+  for(const k of ["home","away"]) if(G.coachFlash[k]>0) G.coachFlash[k]-=dt;
+  for(const r of G.refs) if(r.whistle>0) r.whistle-=dt;
+  for(const p of G.players){ if(p.stun>0)p.stun-=dt; if(p.cd>0)p.cd-=dt; }
+
+  updateControl();
+
+  // human input -> controlled
+  let dx=0,dy=0;
+  if(stick.active){ const ddx=stick.x-stick.ox, ddy=stick.y-stick.oy; if(Math.hypot(ddx,ddy)>12){ dx=clamp(ddx/40,-1,1); dy=clamp(ddy/40,-1,1);} }
+  if(keys["a"]||keys["arrowleft"])dx=-1; if(keys["d"]||keys["arrowright"])dx=1;
+  if(keys["w"]||keys["arrowup"])dy=-1; if(keys["s"]||keys["arrowdown"])dy=1;
+  if(dx||dy) moveEnt(G.controlled,dx,dy);
+
+  // AI
+  for(const e of G.players) ai(e);
+
+  // dunk animation
+  for(const e of G.players){
+    if(e.dunk>0){ e.dunk-=dt; const h=targetHoop(e.team); e.x+=(h.x-e.x)*0.2; e.y+=(h.y-e.y)*0.2;
+      if(e.dunk<=0){ award(e.team,2,e); } }
+  }
+
+  // move entities + friction + bounds
+  for(const e of G.players){ if(e.dunk>0)continue; e.x=clamp(e.x+e.vx,0,CL); e.y=clamp(e.y+e.vy,0,CW); e.vx*=0.6; e.vy*=0.6; }
+
+  // ball
+  const b=G.ball;
+  if(b.shot){
+    const s=b.shot; s.t+=dt; const f=Math.min(1,s.t/s.dur);
+    b.x=s.sx+(s.tx-s.sx)*f; b.y=s.sy+(s.ty-s.sy)*f; b.z=2+Math.sin(Math.PI*f)*s.peak*0.4;
+    if(f>=1){ if(s.made) award(s.team,s.pts,s.shooter); else { b.shot=null; b.x=s.tx; b.y=s.ty; b.z=8; b.held=false; b.handler=null; } }
+  } else if(b.held && b.handler){ b.x=b.handler.x+1.2; b.y=b.handler.y; b.z=3; }
+  else { b.z=Math.max(0,b.z-0.4); }
+
+  // loose pickup
+  if(!b.held && !b.shot){
+    for(const e of G.players){ if(e.stun>0)continue; if(dist(e.x,e.y,b.x,b.y)<3.2 && b.z<4){ giveBall(e); break; } }
+  }
+  // camera follow
+  if(G.camMode==="CELEBRATE" && G.flash<=0) G.camMode="BALL";
+}
+
+function endPeriod(){
+  if(G.q<NQ){ G.q++; G.clock=QSEC; banner(G.q===2?"HALFTIME":"END OF Q"+(G.q-1)); resetCenter(); }
+  else if(G.sh===G.sa){ G.q++; G.clock=OTSEC; banner("OVERTIME!"); resetCenter(); }
+  else { G.over=true; scene="over"; }
+}
+
+// --- render -----------------------------------------------------------------
+function drawCourt(){
+  ctx.fillStyle="#c8894a"; ctx.fillRect(X0,Y0,X1-X0,Y1-Y0);
+  ctx.strokeStyle="#f4f4f8"; ctx.lineWidth=2; ctx.strokeRect(X0,Y0,X1-X0,Y1-Y0);
+  ctx.beginPath(); ctx.moveTo(cx(47),Y0); ctx.lineTo(cx(47),Y1); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx(47),cy(25),26,0,7); ctx.stroke();
+  for(const h of [HOME_HOOP,AWAY_HOOP]){ ctx.fillStyle="#e6502d"; ctx.beginPath(); ctx.arc(cx(h.x),cy(h.y),7,0,7); ctx.fill(); }
+}
+function drawCrowd(){
+  // two bands; brightness from momentum, jump offset on home scores
+  const cols=44;
+  for(let band=0;band<2;band++){
+    const baseY = band===0? 64 : H-50;
+    const jump = G.crowdJump>0? Math.sin(G.crowdJump*Math.PI)*6 : 0;
+    for(let i=0;i<cols;i++){
+      const x=X0+(i/(cols-1))*(X1-X0);
+      const hot = clamp(G.momentum,0,1);
+      const g = Math.floor(80+hot*150);
+      ctx.fillStyle = `rgb(${60+hot*40},${g},${120})`;
+      ctx.beginPath(); ctx.arc(x, baseY - (G.crowdJump>0?jump:0), 3.2, 0, 7); ctx.fill();
+    }
+  }
+}
+function drawSideline(){
+  // coaches + benches on the two ends
+  const setups=[{x:X0-34,name:G.homeName,team:"home",col:"#2ecc71"},{x:X1+34,name:G.awayName,team:"away",col:"#e74c3c"}];
+  for(const s of setups){
+    // bench (small dots)
+    for(let i=0;i<4;i++){ ctx.fillStyle="#888"; ctx.beginPath(); ctx.arc(s.x, Y0+50+i*22, 5,0,7); ctx.fill(); }
+    // coach (flashes red when arguing)
+    ctx.fillStyle = G.coachFlash[s.team]>0 ? "#ff5050" : "#dddddd";
+    ctx.beginPath(); ctx.arc(s.x, Y1-30, 8,0,7); ctx.fill();
+    ctx.fillStyle="#bbb"; ctx.font="10px monospace"; ctx.textAlign="center"; ctx.fillText("COACH", s.x, Y1-14);
+  }
+}
+function drawEntertainment(){
+  // mascot near home baseline, bounces on scores
+  const my = cy(25) + (G.mascotBounce>0? -Math.abs(Math.sin(G.mascotBounce*Math.PI))*14 : 0);
+  ctx.fillStyle="#9b59b6"; ctx.beginPath(); ctx.arc(cx(91), my, 9,0,7); ctx.fill();
+  ctx.fillStyle="#bbb"; ctx.font="9px monospace"; ctx.textAlign="center"; ctx.fillText("MASCOT",cx(91),my-13);
+  // cheerleaders along baseline
+  for(let i=0;i<4;i++){ ctx.fillStyle="#f6c"; ctx.beginPath(); ctx.arc(cx(3), cy(12+i*8.5), 4,0,7); ctx.fill(); }
+}
+function drawRefs(){
+  for(const r of G.refs){
+    ctx.fillStyle = r.whistle>0 ? "#ffec5c" : "#cccccc";
+    ctx.beginPath(); ctx.arc(cx(r.x),cy(r.y),6,0,7); ctx.fill();
+    ctx.strokeStyle="#333"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx(r.x),cy(r.y),6,0,7); ctx.stroke();
+  }
+}
+function drawPlayers(){
+  const arr=G.players.slice().sort((a,b)=>a.y-b.y);
+  for(const p of arr){
+    const sx=cx(p.x), sy=cy(p.y)- (p.dunk>0?14:0);
+    ctx.fillStyle="rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(cx(p.x),cy(p.y),12,6,0,0,7); ctx.fill();
+    if(p===G.controlled){ ctx.strokeStyle="#f1c40f"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(sx,sy,15,0,7); ctx.stroke(); }
+    ctx.fillStyle = p.team==="home"?"#2ecc71":"#e74c3c";
+    if(p.stun>0) ctx.fillStyle="#777";
+    ctx.beginPath(); ctx.arc(sx,sy,12,0,7); ctx.fill();
+    ctx.fillStyle="#fff"; ctx.font="bold 10px monospace"; ctx.textAlign="center"; ctx.fillText(p.role,sx,sy+3);
+    ctx.fillStyle="#eee"; ctx.font="9px monospace"; ctx.fillText(p.name.split(" ").slice(-1)[0], sx, sy-16);
+  }
+}
+function drawBall(){
+  const b=G.ball; ctx.fillStyle="rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(cx(b.x),cy(b.y),5,3,0,0,7); ctx.fill();
+  ctx.fillStyle="#f26c1f"; ctx.beginPath(); ctx.arc(cx(b.x),cy(b.y)-b.z,5,0,7); ctx.fill();
+}
+function drawHUD(){
+  ctx.textAlign="left"; ctx.font="bold 18px monospace"; ctx.fillStyle="#f1c40f";
+  const per=G.q<=NQ?("Q"+G.q):("OT"+(G.q-NQ));
+  ctx.fillText(`${G.homeName}  ${G.sh} - ${G.sa}  ${G.awayName}`, 16, 28);
+  ctx.fillText(`${per}  ${fmtClock(G.clock)}   shot:${Math.ceil(G.shotClock)}`, 16, 52);
+  // buttons
+  for(const k in btns){ const b=btns[k];
+    ctx.fillStyle="rgba(255,255,255,0.12)"; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.fill();
+    ctx.strokeStyle="#eee"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.stroke();
+    ctx.fillStyle="#fff"; ctx.font="bold 13px monospace"; ctx.textAlign="center"; ctx.fillText(b.t,b.x,b.y+4); }
+  // joystick
+  if(stick.active){ ctx.strokeStyle="rgba(255,255,255,0.4)"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(stick.ox,stick.oy,40,0,7); ctx.stroke();
+    ctx.fillStyle="rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(clamp(stick.x,stick.ox-40,stick.ox+40),clamp(stick.y,stick.oy-40,stick.oy+40),18,0,7); ctx.fill(); }
+  // banner
+  if(G.bannerT>0){ ctx.fillStyle="#fff"; ctx.font="bold 30px monospace"; ctx.textAlign="center"; ctx.fillText(G.banner, W/2, 92); }
+}
+function drawFlash(){ if(G.flash>0){ ctx.fillStyle=`rgba(255,255,255,${G.flash*0.4})`; ctx.fillRect(0,0,W,H); } }
+
+function render(){
+  ctx.clearRect(0,0,W,H); ctx.fillStyle="#0d0d12"; ctx.fillRect(0,0,W,H);
+  if(scene==="menu"){ renderMenu(); return; }
+  drawCrowd(); drawCourt(); drawSideline(); drawEntertainment(); drawRefs(); drawPlayers(); drawBall(); drawHUD(); drawFlash();
+  if(scene==="over") renderOver();
+}
+function renderMenu(){
+  ctx.textAlign="center";
+  ctx.fillStyle="#f26c1f"; ctx.font="bold 44px monospace"; ctx.fillText("VOXEL HOOPS", W/2, 120);
+  ctx.fillStyle="#aaa"; ctx.font="16px monospace"; ctx.fillText("Pocket Edition", W/2, 150);
+  ctx.fillStyle="#2ecc71"; ctx.font="bold 24px monospace"; ctx.fillText("HOME (tap left): "+TEAMS[KEYS[menuHome]].name, W/2, 250);
+  ctx.fillStyle="#e74c3c"; ctx.fillText("AWAY (tap right): "+TEAMS[KEYS[menuAway]].name, W/2, 300);
+  ctx.fillStyle="rgba(241,196,15,0.2)"; ctx.beginPath(); ctx.arc(W/2,H-90,70,0,7); ctx.fill();
+  ctx.strokeStyle="#f1c40f"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(W/2,H-90,70,0,7); ctx.stroke();
+  ctx.fillStyle="#fff"; ctx.font="bold 26px monospace"; ctx.fillText("TIP OFF", W/2, H-82);
+  ctx.fillStyle="#888"; ctx.font="13px monospace"; ctx.fillText("You control HOME (green). Tap a half to change teams.", W/2, 360);
+}
+function renderOver(){
+  ctx.fillStyle="rgba(0,0,0,0.7)"; ctx.fillRect(0,0,W,H); ctx.textAlign="center";
+  const win=G.sh>G.sa?G.homeName:G.awayName;
+  ctx.fillStyle="#fff"; ctx.font="bold 44px monospace"; ctx.fillText("FINAL", W/2, 250);
+  ctx.fillStyle="#f1c40f"; ctx.font="bold 34px monospace"; ctx.fillText(`${G.homeName} ${G.sh} - ${G.sa} ${G.awayName}`, W/2, 310);
+  ctx.fillStyle="#eee"; ctx.font="18px monospace"; ctx.fillText(win+" win!  Tap to return to menu.", W/2, 370);
+}
+
+// --- main loop --------------------------------------------------------------
+let last=performance.now();
+function loop(now){
+  let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  update(dt); render(); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
