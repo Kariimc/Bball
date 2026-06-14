@@ -23,6 +23,9 @@ namespace Shift9.Presentation
 
         private GameSim _sim;
         private Transform[] _playerViews;
+
+        /// <summary>The live game, for HUDs/overlays to read.</summary>
+        public GameSim Sim => _sim;
         private Renderer[] _playerRenderers;
         private Transform _ballView;
         private Material _homeMat;
