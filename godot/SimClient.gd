@@ -24,6 +24,10 @@ signal game_loaded(summary: Dictionary)
 signal possession_played(play: Dictionary)
 signal game_finished(summary: Dictionary)
 signal session_started(info: Dictionary)
+signal teams_listed(teams: Dictionary)
+signal team_imported(info: Dictionary)
+signal series_done(result: Dictionary)
+signal bracket_done(result: Dictionary)
 
 @export var base_url: String = "http://127.0.0.1:8765"
 ## Seconds of wall-clock time per possession during replay().
@@ -79,6 +83,32 @@ func step() -> void:
 		push_error("SimClient: no active session -- call start_session() first")
 		return
 	_get("/possession?session=" + _session)
+
+
+# -- full feature surface (teams / import / playoffs) --------------------------
+## List all available teams (built-in + imported) -> teams_listed signal.
+func list_teams() -> void:
+	_get("/teams")
+
+## Import a custom team from a URL -> team_imported signal. Use allow_private
+## only for trusted localhost JSON during development.
+func import_team(url: String, allow_private: bool = false) -> void:
+	var q := "url=" + url.uri_encode()
+	if allow_private:
+		q += "&allow_private=1"
+	_get("/import?" + q)
+
+## Run a best-of-N playoff series -> series_done signal.
+func run_series(a: String, b: String, best_of: int = 7, series_seed: int = -1) -> void:
+	var q := "a=%s&b=%s&best_of=%d" % [a, b, best_of]
+	if series_seed >= 0:
+		q += "&seed=%d" % series_seed
+	_get("/series?" + q)
+
+## Run a single-elimination bracket -> bracket_done signal.
+## `team_keys` is a power-of-two list, e.g. ["BOS","DEN","OKC","MIL"].
+func run_bracket(team_keys: Array, best_of: int = 7) -> void:
+	_get("/bracket?teams=" + ",".join(PackedStringArray(team_keys)) + "&best_of=%d" % best_of)
 
 
 # -- HTTP plumbing -------------------------------------------------------------

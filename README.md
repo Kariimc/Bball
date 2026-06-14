@@ -1,196 +1,96 @@
-# Bball
+# Bball — Voxel Hoops
 
-A deterministic, fully-playable NBA game-simulation engine in pure Python
-(stdlib only). Designed as the headless logic layer for a 2.5D / voxel
-basketball game — it computes pure game-state telemetry and never renders, so
-visuals and animation can be driven by a separate front end (e.g. Ursina).
+A real-time, playable isometric voxel basketball game in Python. **The game is
+`voxel_hoops.py`** — that's the source of truth. Everything else in the repo is a
+supporting system that feeds it (teams, ratings, custom-team import) or extends
+it (a headless stats engine, playoff sim, and a Godot 3D client where custom
+character models/animations are authored).
 
-Season lens: **2004-05 NBA Finals — San Antonio Spurs vs. Detroit Pistons.**
+No duplicated code: the game imports its vector math from the engine, its court
+geometry/scoring from `court_rules.py`, and its teams from the shared roster
+registry — so one change propagates everywhere.
+
+## Play it
+
+```bash
+pip install pygame
+python voxel_hoops.py                       # Boston vs Denver
+python voxel_hoops.py --home OKC --away MIN
+python voxel_hoops.py --import-url https://example.com/team.json
+```
+
+**Controls:** `WASD`/arrows move · `Space` catch / shoot / dunk · `E` strip
+steal · `R` rematch · `Esc` quit.
+
+**It's a real match:** two-way scoring (each team attacks its own hoop), 2- and
+3-pointers by distance, a quarter clock with 4 quarters + overtime, AI that
+chases loose balls and drives to the rim to score, possession resets after
+makes, out-of-bounds turnovers, a final/rematch screen, and Steam achievements
+(first basket, dunk, clean steal, buzzer-beater, comeback win).
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `nba_comprehensive_game_engine.py` | The engine: vector math, entities, AI, possession + full-game sim, injuries, steppable API. |
-| `rosters_2005.py` | 2004-05 Spurs & Pistons (archetype-approximated ratings). |
-| `rosters_modern.py` | Six fictional teams modeled on current-NBA play-style archetypes. |
-| `rosters.py` | Aggregator: one lookup over every team across eras. |
-| `series.py` | Playoff layer: best-of-N series & single-elimination brackets with persistent injuries. |
-| `sim_service.py` | Stdlib HTTP / subprocess transport (replay, live-step sessions, series, bracket). |
-| `godot/` | Runnable Godot 4 front-end POC (`project.godot`, `Main.tscn`, `SimClient.gd`, `Scoreboard.gd`). |
-| `tests/` | 54-test regression suite (stdlib `unittest`). |
+| **`voxel_hoops.py`** | **The game** — real-time isometric voxel basketball (pygame). |
+| `court_rules.py` | Pygame-free court geometry + scoring rules (shared, testable). |
+| `arcade_adapter.py` | Maps the shared 18-stat rosters into the game's 4-stat model. |
+| `rosters.py` | Aggregator + runtime registry over every team (all eras + imported). |
+| `rosters_2005.py` / `rosters_modern.py` | Team data: 2004-05 Spurs/Pistons; six fictional modern teams. |
+| `team_import.py` | Import custom teams from a URL/file (validated, SSRF-guarded). |
+| `nba_comprehensive_game_engine.py` | Headless deterministic stats engine (sim, box scores, telemetry). |
+| `series.py` | Playoff layer: best-of-N series & brackets with persistent injuries. |
+| `sim_service.py` | Stdlib HTTP/subprocess service exposing the engine to any client. |
+| `godot/` | Godot 4 client (where you author 3D characters/animations). |
+| `examples/team_template.json` | Schema/template for a custom team. |
+| `tests/` | 91-test stdlib `unittest` suite. |
 
 ### Teams
 
 `2005`: `SAS` Spurs · `DET` Pistons.
-`modern` (fictional, archetype-based): `BOS` Boston Shamrocks · `DEN` Denver
-Altitude · `OKC` Oklahoma Thunderbirds · `MIL` Milwaukee Voltage · `DAL` Dallas
-Lone Stars · `MIN` Minnesota Tundra.
-
-## Quick start
-
-```bash
-# Simulate a full game with live play-by-play and box scores
-python nba_comprehensive_game_engine.py
-
-# Run the test suite
-python -m unittest discover -s tests -v
-```
-
-### Use it as a library
-
-```python
-from nba_comprehensive_game_engine import NBAUnifiedEngine, build_team
-from rosters_2005 import SPURS_2005, PISTONS_2005
-
-home = build_team("San Antonio Spurs", "HOME", SPURS_2005)
-away = build_team("Detroit Pistons", "AWAY", PISTONS_2005)
-
-engine = NBAUnifiedEngine(home=home, away=away, seed=2005, difficulty=0.7)
-summary = engine.simulate_game(verbose=False)
-
-print(summary["final_score"])          # {'HOME': ..., 'AWAY': ...}
-print(summary["home"]["players"][0])   # leading scorer's full box line
-# engine.play_by_play -> list of serializable possession telemetry dicts
-```
-
-## Playoffs (series, brackets, injuries)
-
-```bash
-# Best-of-7 series (injuries persist across games; higher seed hosts 2-2-1-1-1)
-python series.py --a OKC --b BOS --best-of 7 --seed 7
-
-# Single-elimination bracket (power-of-two field, seeded by team strength)
-python series.py --bracket BOS,DEN,OKC,MIL,DAL,MIN,SAS,DET --seed 7
-
-python series.py --list   # show all team keys
-```
-
-Injuries are modeled in every game: risk scales with fatigue and falls with
-conditioning. A hurt player is subbed out and may miss future games
-(`games_out`), which `series.py` carries forward across the series. Tune via the
-engine's `injury_rate` (default `0.0005`, ~0.5 in-game injuries/game).
+`modern` (fictional): `BOS` Boston Shamrocks · `DEN` Denver Altitude · `OKC`
+Oklahoma Thunderbirds · `MIL` Milwaukee Voltage · `DAL` Dallas Lone Stars ·
+`MIN` Minnesota Tundra. Plus any team you import from a URL.
 
 ## Import custom teams from a URL
 
-Host a team as JSON anywhere (GitHub raw, a gist, your own server) and pull it in
-by URL. See `examples/team_template.json` for the schema. Imported teams register
-under a key and work everywhere built-ins do (sim, series, bracket).
+Host a team as JSON anywhere and pull it in by key. It then works in the game
+**and** in the stats engine, series, and brackets. Schema:
+`examples/team_template.json`.
 
 ```bash
-# Validate a file or URL from the CLI
-python team_import.py --file examples/team_template.json
-python team_import.py --url https://example.com/myteam.json
-
-# Or over the service: import, then use the returned key
-curl "http://127.0.0.1:8765/import?url=https://example.com/myteam.json"
-curl "http://127.0.0.1:8765/simulate?home=CUST&away=BOS"
-```
-
-```python
-from team_import import import_team_from_url
-info = import_team_from_url("https://example.com/myteam.json")  # -> {"key": "CUST", ...}
+python team_import.py --file examples/team_template.json     # validate
+python voxel_hoops.py --import-url https://example.com/team.json   # play it
 ```
 
 **Security:** importing fetches a user-supplied URL server-side, so the loader
-refuses non-public targets (loopback/private/link-local IPs), caps the response
-size, and times out. Ratings are clamped to valid ranges and unknown stat keys
-are dropped. For trusted local dev (e.g. a localhost JSON), pass
-`allow_private=True` (CLI `--allow-private`, or `&allow_private=1` on `/import`).
+refuses non-public targets (loopback/private/link-local IPs), caps response
+size, and times out. Ratings are clamped; unknown stat keys are dropped. For
+trusted local dev, pass `--allow-private`.
 
-## Two ways for a front end to consume it
+## Supporting systems (kept & wired up)
 
-**1. Replay (deterministic, simplest).** Fetch a whole game, animate the
-`play_by_play` array at your own pace.
+These existed before the game became the focus and remain useful — they share
+the same teams/data so nothing is duplicated:
 
-**2. Live step-through (stateful session).** Drive it one possession at a time —
-the engine exposes `start_game()` + `step_possession()`, surfaced over HTTP as
-`/start` → repeated `/possession`.
+- **Headless stats engine** (`nba_comprehensive_game_engine.py`): a deterministic,
+  possession-by-possession simulator with box scores, fatigue/subs, injuries,
+  and JSON-serializable play-by-play. Run a full sim:
+  `python nba_comprehensive_game_engine.py`.
+- **Playoffs** (`series.py`): best-of-N series (2-2-1-1-1 home court) and seeded
+  brackets, with injuries that persist across games.
+  `python series.py --bracket BOS,DEN,OKC,MIL,DAL,MIN,SAS,DET`.
+- **Sim service** (`sim_service.py`): stdlib HTTP endpoints (`/simulate`,
+  `/start`+`/possession`, `/series`, `/bracket`, `/import`) so a Godot/web client
+  can drive or watch simulations. `python sim_service.py --port 8765`.
+- **Godot 3D client** (`godot/`): where you build your 3D characters and
+  animations. Player models are swappable via the `player_scene` export.
 
-```python
-engine.start_game()
-while True:
-    play = engine.step_possession()
-    if play["game_over"]:
-        break
-    render(play)   # play["clock"], play["score"], play["events"], play["shot"]
-```
-
-## Front-end integration (Godot via Python sim service)
-
-The engine is headless Python; Godot renders. Because every game is
-deterministic, the pattern is **fetch once, replay locally** — Godot pulls a
-full game and animates the `play_by_play` array at its own pace, driving the
-scoreboard/clock from the telemetry fields. No per-frame round trips.
+## Develop
 
 ```bash
-# Start the sim service (stdlib only, no Flask/FastAPI)
-python sim_service.py --port 8765
-
-#   GET /health
-#   GET /teams
-#   GET /simulate?seed=2005&difficulty=0.7&home=SAS&away=DET   (replay mode)
-#   GET /start?seed=7&home=BOS&away=DEN  ->  GET /possession?session=ID  (live step)
-#   GET /series?a=BOS&b=DEN&best_of=7
-#   GET /bracket?teams=BOS,DEN,OKC,MIL,DAL,MIN,SAS,DET
-
-# Or one-shot subprocess mode (Godot OS.execute):
-python sim_service.py --once --seed 7 --difficulty 0.7
+python -m unittest discover -s tests -v     # 91 tests, stdlib only
 ```
 
-**Runnable Godot POC:** with the service running, open the `godot/` folder in
-Godot 4 and press Play. The main scene `Court3D.tscn` shows a 3D court with
-**placeholder capsule players** (5 per team in a half-court set), a scoreboard,
-and a ball that animates to each shooter — all driven live via `/start` →
-`/possession`. (`Main.tscn` is a 2D scoreboard-only alternative.)
-
-> **Swapping in your own 3D models:** assign your character scene to the
-> `player_scene` export on the `Court` node (or replace `Player.tscn`). It only
-> needs a `setup(name, number, color)` method — the controller handles
-> positioning. Court coordinates are in feet; see `Court.gd::_court_to_world()`.
-
-`SimClient.gd` supports both replay and live-step modes; here is the telemetry
-read pattern:
-
-```gdscript
-@onready var sim: SimClient = $Sim
-sim.session_started.connect(func(info): timer.start())   # live-step
-sim.possession_played.connect(func(play):
-    $HomeScore.text = str(play["score"]["HOME"])
-    $Clock.text = play.get("clock", ""))
-sim.start_session(7, 0.6, "BOS", "DEN")
-# then call sim.step() on a Timer to advance one possession at a time
-```
-
-## Design
-
-- **Deterministic.** A single seeded `random.Random` is threaded through every
-  stochastic system, so `seed=N` always reproduces the exact same game — ideal
-  for replays, debugging, and data migration.
-- **Single source of truth.** `GameState` owns the clock, score, fouls, and
-  possession; `GameScenarioEngine` is a pure strategy advisor that *reads* it
-  (no duplicated, drifting state).
-- **Serializable telemetry.** Every possession and the final summary export to
-  plain dicts (`json.dumps`-safe) — rendering layers consume telemetry, never
-  internal objects.
-- **No heavy dependencies.** Custom `Vector3` (slots), linear-interpolated AI
-  envelopes, and probabilistic shot curves — no NumPy, no engine lock-in.
-
-### Simulated systems
-
-Jump-ball tip-off · possession-by-possession half-court & transition offense ·
-shot selection by zone/play/strategy · defensive contests, paint denial &
-shot-blocking · live-ball turnovers → fast breaks · rebounding & second-chance
-putbacks · shooting fouls, and-1s, free throws & the penalty/bonus ·
-crunch-time tactics (clock-kill iso, three-hunting, intentional fouls) ·
-fatigue + automatic substitutions · 4 quarters with overtime.
-
-### Tuning
-
-`difficulty` (0.0–1.0) scales AI reaction/timing windows. Shot realism is
-governed by `SHOT_CURVE` (rating → expected FG% per zone). Out of the box the
-engine produces NBA-plausible lines: ~100 ppg, ~44% FG, ~32% 3P, ~200
-possessions/game, balanced win split between evenly-matched teams.
-
-> Roster ratings are archetype-derived approximations tuned to reproduce each
-> player's *relative* real-world strengths that season, not official numbers.
+> Roster ratings are archetype-derived approximations; the modern teams and
+> their players are fictional.
