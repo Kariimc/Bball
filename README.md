@@ -18,7 +18,10 @@ and tap it; it opens in your browser and plays offline. Easiest ways to get it
 onto the phone:
 
 - Email `web/bball.html` to yourself and open the attachment in Chrome, **or**
-- Save it to your phone's Downloads and tap it in the Files app (opens in browser).
+- Save it to your phone's Downloads and tap it in the Files app (opens in browser), **or**
+- Open it on any device and tap **⇪ SHARE** on the menu to send the file to your
+  phone (or a friend) via any messaging app; **⭳ SAVE** keeps a copy. After it's
+  open on the phone, use the browser's "Add to Home Screen" to relaunch like an app.
 
 Turn the phone **sideways (landscape)**. Drag the **left** side to move; the
 **SHOOT / PASS / STEAL** buttons are on the right. Tap a half of the menu to pick
@@ -45,6 +48,10 @@ python voxel_hoops.py --import-url https://example.com/team.json
 · `R` back to team select · `Esc` quit. You always control the **ball-carrier**
 (or the nearest defender when the other team has it) — control switches
 automatically.
+
+The desktop game now also renders the **broadcast cast** (crowd + momentum,
+referees, mascot, cheerleaders, coaches that flash when they argue a foul, plus a
+celebration screen flash) — the same `presentation.py` logic the web build uses.
 
 **It's a real match:** full **5-on-5** with team AI (spacing, drives, passing,
 man-to-man defense, steals), two-way scoring with 2- and 3-pointers by distance,

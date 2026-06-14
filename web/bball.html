@@ -128,10 +128,36 @@ window.addEventListener("keydown",e=>{ keys[e.key.toLowerCase()]=true;
 window.addEventListener("keyup",e=>{ keys[e.key.toLowerCase()]=false; });
 
 function handleMenuTap(p){
-  // top half cycles home, bottom half cycles away; center button starts
+  if(dist(p.x,p.y,W-110,46)<50){ shareSelf(); return; }     // share/send the file
+  if(dist(p.x,p.y,110,46)<50){ saveSelf(); return; }        // save a copy
+  // center button starts; otherwise tap a half to change that team
   if(dist(p.x,p.y,W/2,H-90)<70){ setupMatch(KEYS[menuHome],KEYS[menuAway]); return; }
   if(p.x<W/2) menuHome=(menuHome+1)%KEYS.length; else menuAway=(menuAway+1)%KEYS.length;
 }
+
+// --- save / share this game (so it's easy to get onto a phone) --------------
+function selfHtml(){ return "<!DOCTYPE html>\n"+document.documentElement.outerHTML; }
+function saveSelf(){
+  try{
+    const blob=new Blob([selfHtml()],{type:"text/html"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob); a.download="bball.html";
+    document.body.appendChild(a); a.click(); a.remove();
+    flashMsg("Saved bball.html");
+  }catch(e){ flashMsg("Save not supported here"); }
+}
+async function shareSelf(){
+  try{
+    const file=new File([selfHtml()],"bball.html",{type:"text/html"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:"Voxel Hoops"}); return;
+    }
+    if(navigator.share){ await navigator.share({title:"Voxel Hoops", text:"Voxel Hoops — open this file in your browser to play."}); return; }
+    saveSelf();
+  }catch(e){ saveSelf(); }
+}
+let _msg="", _msgT=0;
+function flashMsg(t){ _msg=t; _msgT=2; }
 
 // --- gameplay helpers -------------------------------------------------------
 function teammates(t){ return t==="home"?G.home:G.away; }
@@ -405,6 +431,13 @@ function renderMenu(){
   ctx.strokeStyle="#f1c40f"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(W/2,H-90,70,0,7); ctx.stroke();
   ctx.fillStyle="#fff"; ctx.font="bold 26px monospace"; ctx.fillText("TIP OFF", W/2, H-82);
   ctx.fillStyle="#888"; ctx.font="13px monospace"; ctx.fillText("You control HOME (green). Tap a half to change teams.", W/2, 360);
+  // save / share buttons (top corners)
+  for(const b of [{x:110,y:46,t:"⭳ SAVE"},{x:W-110,y:46,t:"⇪ SHARE"}]){
+    ctx.fillStyle="rgba(46,204,113,0.18)"; ctx.beginPath(); ctx.arc(b.x,b.y,46,0,7); ctx.fill();
+    ctx.strokeStyle="#2ecc71"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(b.x,b.y,46,0,7); ctx.stroke();
+    ctx.fillStyle="#eee"; ctx.font="bold 13px monospace"; ctx.fillText(b.t,b.x,b.y+4);
+  }
+  if(_msgT>0){ ctx.fillStyle="#2ecc71"; ctx.font="bold 16px monospace"; ctx.fillText(_msg, W/2, 110); }
 }
 function renderOver(){
   ctx.fillStyle="rgba(0,0,0,0.7)"; ctx.fillRect(0,0,W,H); ctx.textAlign="center";
@@ -418,6 +451,7 @@ function renderOver(){
 let last=performance.now();
 function loop(now){
   let dt=(now-last)/1000; last=now; if(dt>0.05)dt=0.05;
+  if(_msgT>0)_msgT-=dt;
   update(dt); render(); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

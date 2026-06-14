@@ -30,6 +30,8 @@ import pygame
 from nba_comprehensive_game_engine import Vector3
 from arcade_adapter import get_arcade_matchup
 from rosters import all_teams
+from game_events import EventBus, GameEvent as GE
+from presentation import PresentationDirector
 from court_rules import (
     COURT_WIDTH, COURT_LENGTH, RIM_HEIGHT, DUNK_RANGE, SHOOT_RANGE,
     HOME_HOOP, AWAY_HOOP, distance, target_hoop, point_value, is_scoring_position,
@@ -343,6 +345,12 @@ class GameEngine:
         self.max_home_deficit = 0
         self.banner = ""
         self.banner_timer = 0
+        # Broadcast cast (crowd, refs, mascot, cheerleaders, coaches, camera).
+        # Reuses the shared presentation logic; we render it below.
+        self.bus = EventBus()
+        self.presentation = PresentationDirector(self.bus)
+        self._celebrate = 0.0       # screen flash / mascot bounce / crowd jump
+        self._ref_whistle = 0.0
         self.scene = "play"
         self.steam.set_rich_presence("Tip-Off", f"{self.home_name} vs {self.away_name}")
 
@@ -432,6 +440,8 @@ class GameEngine:
                 target.state_timer = 45
                 self._give_ball(c)
                 self.steam.unlock_achievement("CLEAN_STEAL")
+            elif random.random() < 0.12:
+                self._whistle_foul("home", target)   # reach-in
 
     # -- shots / possession ----------------------------------------------------
     def _give_ball(self, player):
@@ -492,6 +502,29 @@ class GameEngine:
         if self.game_clock <= 3.0:
             self.steam.unlock_achievement("BUZZER_BEATER")
         self.steam.set_rich_presence("Score", f"{self.home_name} {self.score_home}-{self.score_away} {self.away_name}")
+        # Tell the broadcast cast (crowd/mascot/camera/benches react).
+        self.bus.emit(GE.SCORE, team=team.upper(), points=points, dunk=dunk)
+        if dunk:
+            self.bus.emit(GE.DUNK, team=team.upper())
+        self._celebrate = 0.7
+        self._reset_ball_center()
+
+    def _whistle_foul(self, fouling_team: str, fouled) -> None:
+        """Light reach-in foul: refs whistle, the fouling coach argues, the
+        fouled team shoots 2 free throws (resolved instantly)."""
+        self._ref_whistle = 0.8
+        self.bus.emit(GE.FOUL, team=fouling_team.upper())
+        ft_team = "away" if fouling_team == "home" else "home"
+        made = 0
+        for _ in range(2):
+            if random.random() < 0.55 + fouled.stats["shooting"] * 0.03:
+                made += 1
+        if ft_team == "home":
+            self.score_home += made
+        else:
+            self.score_away += made
+        self.banner = f"FOUL  --  {made}/2 FT"
+        self.banner_timer = 90
         self._reset_ball_center()
 
     def _reset_ball_center(self):
@@ -555,10 +588,13 @@ class GameEngine:
         ty = mark.pos.y * 0.6 + by * 0.4
         self._steer(e, tx, ty)
         if mark is handler and distance(e.pos.x, e.pos.y, handler.pos.x, handler.pos.y) < 3.5:
-            if random.random() < 0.008 + e.stats["steal"] * 0.003:
+            roll = random.random()
+            if roll < 0.008 + e.stats["steal"] * 0.003:
                 handler.state = PlayerState.STUNNED
                 handler.state_timer = 30
                 self._give_ball(e)
+            elif roll < 0.018:
+                self._whistle_foul(e.team, handler)
 
     def _steer(self, e, tx, ty):
         dx = 1 if tx > e.pos.x + 0.6 else (-1 if tx < e.pos.x - 0.6 else 0)
@@ -578,6 +614,11 @@ class GameEngine:
             self.banner_timer -= 1
             if self.banner_timer == 0:
                 self.banner = ""
+        if self._celebrate > 0:
+            self._celebrate -= dt
+        if self._ref_whistle > 0:
+            self._ref_whistle -= dt
+        self.presentation.update(dt, self.ball.pos)
 
         self._update_control()
         self._process_ai()
@@ -610,6 +651,7 @@ class GameEngine:
         self.max_home_deficit = max(self.max_home_deficit, self.score_away - self.score_home)
 
     def _end_period(self):
+        self.bus.emit(GE.PERIOD_END, quarter=self.quarter)
         if self.quarter < NUM_QUARTERS:
             self.quarter += 1
             self.game_clock = QUARTER_SECONDS
@@ -648,9 +690,60 @@ class GameEngine:
         if self.ball.is_held:
             self.ball.draw(self.screen)
 
+        self._draw_cast()
+        self._draw_flash()
         self._render_hud()
         if self.game_over:
             self._render_final()
+
+    def _draw_cast(self):
+        """Render the broadcast cast (crowd, refs, mascot, cheerleaders, coaches)
+        reading the shared PresentationDirector state."""
+        from presentation import CoachState
+        pres = self.presentation
+
+        # Crowd bands (screen space): brighter with home momentum, jump on score.
+        m = pres.crowd.home_momentum
+        jump = int(7 * (self._celebrate / 0.7)) if self._celebrate > 0 else 0
+        col = (int(60 + m * 60), int(90 + m * 120), 150)
+        for top, band_y in ((True, 10), (False, SCREEN_HEIGHT - 16)):
+            for i in range(46):
+                x = 60 + i * ((SCREEN_WIDTH - 120) / 45)
+                pygame.draw.circle(self.screen, col, (int(x), band_y - (jump if top else 0)), 3)
+
+        # Coaches at the sidelines; flash red when arguing/ejected.
+        for side, cx_pos in (("HOME", 22), ("AWAY", SCREEN_WIDTH - 22)):
+            unit = pres.home_sideline if side == "HOME" else pres.away_sideline
+            ccol = (255, 80, 80) if unit.coach_state in (CoachState.ARGUING_CALL, CoachState.EJECTED) else (210, 210, 210)
+            pygame.draw.circle(self.screen, ccol, (cx_pos, SCREEN_HEIGHT // 2), 9)
+            for j in range(3):  # bench
+                pygame.draw.circle(self.screen, (130, 130, 130), (cx_pos, SCREEN_HEIGHT // 2 + 26 + j * 18), 5)
+
+        # Referees (court space) trailing the ball; flash on a whistle.
+        rcol = (255, 236, 92) if self._ref_whistle > 0 else (205, 205, 205)
+        bx, by = self.ball.pos.x, self.ball.pos.y
+        for ox, oy in ((0, -7), (-9, 6), (9, 6)):
+            sx, sy = iso_project(max(0, min(COURT_LENGTH, bx + ox)), max(0, min(COURT_WIDTH, by + oy)), 0)
+            pygame.draw.circle(self.screen, rcol, (sx, sy), 5)
+            pygame.draw.circle(self.screen, (40, 40, 40), (sx, sy), 5, 1)
+
+        # Mascot near the home baseline; bounces on a score.
+        mb = int(12 * (self._celebrate / 0.7)) if self._celebrate > 0 else 0
+        mx, my = iso_project(90, 8, 0)
+        pygame.draw.circle(self.screen, (155, 89, 182), (mx, my - mb), 8)
+
+        # Cheerleaders near the away baseline.
+        for i in range(4):
+            cxp, cyp = iso_project(4, 14 + i * 8, 0)
+            pygame.draw.circle(self.screen, (245, 120, 200), (cxp, cyp), 4)
+
+    def _draw_flash(self):
+        if self._celebrate > 0:
+            alpha = int(110 * (self._celebrate / 0.7))
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            overlay.set_alpha(alpha)
+            overlay.fill((255, 255, 255))
+            self.screen.blit(overlay, (0, 0))
 
     def _render_hud(self):
         f = self.font_hud
