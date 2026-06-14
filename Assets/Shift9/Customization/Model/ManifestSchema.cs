@@ -53,6 +53,7 @@ namespace Shift9.Customization.Model
         [JsonProperty("arenaId")]   public string ArenaId;
         [JsonProperty("primary")]   public string Primary;   // hex "#RRGGBB"
         [JsonProperty("secondary")] public string Secondary; // hex "#RRGGBB"
+        [JsonProperty("logoUrl")]   public string LogoUrl;   // optional team logo image
         [JsonProperty("uniforms")]  public List<UniformDef> Uniforms;
         [JsonProperty("players")]   public List<PlayerDef> Players;
     }

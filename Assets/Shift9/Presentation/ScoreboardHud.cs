@@ -30,6 +30,7 @@ namespace Shift9.Presentation
         private static readonly Color Amber = new Color(0.98f, 0.74f, 0.16f, 1f);
 
         private GUIStyle _abbrev, _score, _period, _clock, _shot, _network, _sub;
+        private Texture _homeLogo, _awayLogo;
 
         /// <summary>Configure the bug from team data (customization hook).</summary>
         public void SetTeams(string homeAbbrev, Color homeColor, string awayAbbrev, Color awayColor)
@@ -38,6 +39,13 @@ namespace Shift9.Presentation
             _homeColor = homeColor;
             _awayAbbrev = awayAbbrev;
             _awayColor = awayColor;
+        }
+
+        /// <summary>Supply loaded team logo textures (null falls back to the color tab).</summary>
+        public void SetLogos(Texture homeLogo, Texture awayLogo)
+        {
+            _homeLogo = homeLogo;
+            _awayLogo = awayLogo;
         }
 
         public void SetSubtitle(string subtitle) => _subtitle = subtitle;
@@ -69,7 +77,11 @@ namespace Shift9.Presentation
             bool hasSub = !string.IsNullOrEmpty(_subtitle);
             float subH = hasSub ? 20f : 0f;
 
-            float w = net + (tab + abbr + sc) * 2f + per + pill + shotW;
+            // A team logo (when loaded) replaces the thin color tab with a square.
+            float homeLead = _homeLogo != null ? barH : tab;
+            float awayLead = _awayLogo != null ? barH : tab;
+
+            float w = net + (homeLead + abbr + sc) + (awayLead + abbr + sc) + per + pill + shotW;
             float x = 16f;
             float y = Screen.height - barH - subH - 16f;
 
@@ -81,10 +93,9 @@ namespace Shift9.Presentation
             Text(new Rect(cx, y, net, barH), _networkTag, _network, Color.white);
             cx += net;
 
-            // Home team: color tab + abbrev + score
-            cx = TeamCell(cx, y, barH, tab, abbr, sc, _homeColor, _homeAbbrev, g.HomeScore);
-            // Away team
-            cx = TeamCell(cx, y, barH, tab, abbr, sc, _awayColor, _awayAbbrev, g.AwayScore);
+            // Home / Away: logo (if loaded) or color tab, then abbrev + score
+            cx = TeamCell(cx, y, barH, homeLead, abbr, sc, _homeColor, _homeLogo, _homeAbbrev, g.HomeScore);
+            cx = TeamCell(cx, y, barH, awayLead, abbr, sc, _awayColor, _awayLogo, _awayAbbrev, g.AwayScore);
 
             // Period + clock pill + shot clock
             FillRect(new Rect(cx, y, per + pill + shotW, barH), BarPanel);
@@ -107,11 +118,14 @@ namespace Shift9.Presentation
             }
         }
 
-        private float TeamCell(float cx, float y, float h, float tab, float abbr, float sc,
-            Color teamColor, string abbrevText, int scoreValue)
+        private float TeamCell(float cx, float y, float h, float lead, float abbr, float sc,
+            Color teamColor, Texture logo, string abbrevText, int scoreValue)
         {
-            FillRect(new Rect(cx, y, tab, h), teamColor);
-            cx += tab;
+            if (logo != null)
+                GUI.DrawTexture(new Rect(cx, y, lead, h), logo, ScaleMode.ScaleToFit);
+            else
+                FillRect(new Rect(cx, y, lead, h), teamColor);
+            cx += lead;
             Text(new Rect(cx + 8f, y, abbr - 8f, h), abbrevText, _abbrev, Color.white);
             cx += abbr;
             Text(new Rect(cx, y, sc, h), scoreValue.ToString(), _score, Color.white);

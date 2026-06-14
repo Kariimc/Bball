@@ -37,6 +37,7 @@ namespace Shift9.Customization.Mapping
         public string ArenaId;
         public Color32 Primary;
         public Color32 Secondary;
+        public string LogoUrl;
         public List<RuntimeUniform> Uniforms = new();
         public List<RuntimePlayer> Players = new();
     }

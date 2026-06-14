@@ -145,12 +145,15 @@ namespace Shift9.Customization.Pipeline
                     if (a.JumbotronUrl != null) urls.Add(a.JumbotronUrl);
                 }
             foreach (var t in m.Teams)
+            {
+                if (t.LogoUrl != null) urls.Add(t.LogoUrl);
                 if (t.Uniforms != null)
                     foreach (var u in t.Uniforms)
                     {
                         if (u.BaseUrl != null) urls.Add(u.BaseUrl);
                         if (u.MaskUrl != null) urls.Add(u.MaskUrl);
                     }
+            }
             return urls;
         }
 

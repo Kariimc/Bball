@@ -128,6 +128,7 @@ namespace Shift9.Customization.Validation
                 t.Name = Sanitize(t.Name);
                 t.Primary = NormalizeHexOrWarn(t.Primary, "#1E1E1E", $"team '{t.Id}' primary", warnings);
                 t.Secondary = NormalizeHexOrWarn(t.Secondary, "#FFFFFF", $"team '{t.Id}' secondary", warnings);
+                t.LogoUrl = KeepUrlOrWarn(t.LogoUrl, $"team '{t.Id}' logo", warnings);
 
                 if (t.Uniforms != null)
                 {

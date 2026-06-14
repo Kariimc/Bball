@@ -35,7 +35,8 @@ namespace Shift9.Customization.Mapping
                 var team = new RuntimeTeam
                 {
                     Id = t.Id, Name = t.Name, ArenaId = t.ArenaId,
-                    Primary = ParseHex(t.Primary), Secondary = ParseHex(t.Secondary)
+                    Primary = ParseHex(t.Primary), Secondary = ParseHex(t.Secondary),
+                    LogoUrl = t.LogoUrl
                 };
 
                 if (t.Uniforms != null)
