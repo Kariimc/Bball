@@ -11,11 +11,13 @@ namespace Shift9.Sim.Tests
     {
         private const float Dt = SimConstants.FixedTimestep;
 
+        private static bool Terminal(PossessionPhase p) =>
+            p == PossessionPhase.Made || p == PossessionPhase.Missed || p == PossessionPhase.Turnover;
+
         private static PossessionSim RunToEnd(ulong seed)
         {
             var sim = new PossessionSim(seed, new Scoreboard(), offenseIsHome: true, attackHomeBasket: false);
-            for (int i = 0; i < 2000 && sim.Phase != PossessionPhase.Made && sim.Phase != PossessionPhase.Missed; i++)
-                sim.Tick(Dt);
+            for (int i = 0; i < 2000 && !Terminal(sim.Phase); i++) sim.Tick(Dt);
             return sim;
         }
 
@@ -24,7 +26,11 @@ namespace Shift9.Sim.Tests
         {
             // Passing chains + drives should produce shots from different zones (incl. threes).
             var zones = new HashSet<ShotZone>();
-            for (ulong s = 1; s <= 40; s++) zones.Add(RunToEnd(s).LastShotZone);
+            for (ulong s = 1; s <= 40; s++)
+            {
+                var sim = RunToEnd(s);
+                if (sim.Phase != PossessionPhase.Turnover) zones.Add(sim.LastShotZone); // only count actual shots
+            }
             Assert.GreaterOrEqual(zones.Count, 2);
             Assert.IsTrue(zones.Contains(ShotZone.ThreePoint), "expected some three-point attempts");
         }

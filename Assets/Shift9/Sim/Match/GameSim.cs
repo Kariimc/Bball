@@ -1,4 +1,5 @@
 using Shift9.Sim.Core;
+using Shift9.Sim.Players;
 using Shift9.Sim.Rules;
 using UnityEngine;
 
@@ -29,6 +30,8 @@ namespace Shift9.Sim.Match
         private readonly Possession _possession = new Possession(Team.Home);
         private DeterministicRng _master;
         private PossessionSim _current;
+        private readonly AttributeProfile[] _homeAttrs;
+        private readonly AttributeProfile[] _awayAttrs;
 
         public int HomeScore => _scoreboard.HomeScore;
         public int AwayScore => _scoreboard.AwayScore;
@@ -43,10 +46,14 @@ namespace Shift9.Sim.Match
         public Vector3 BallPosition => _current.BallPosition;
         public int BallHolderIndex => _current.BallHolderIndex;
 
-        public GameSim(ulong seed, float quarterLength = 720f, int numQuarters = 4)
+        public GameSim(ulong seed, float quarterLength = 720f, int numQuarters = 4,
+            AttributeProfile[] homeRoster = null, AttributeProfile[] awayRoster = null)
         {
             _master = new DeterministicRng(seed);
             _clock = new GameClock(quarterLength, numQuarters);
+            // Each team keeps one fixed roster for the whole game (consistent players per possession).
+            _homeAttrs = homeRoster ?? RandomRoster.Generate(ref _master, PossessionSim.PlayersPerTeam);
+            _awayAttrs = awayRoster ?? RandomRoster.Generate(ref _master, PossessionSim.PlayersPerTeam);
             StartPossession(fullShotClock: true);
         }
 
@@ -74,6 +81,11 @@ namespace Shift9.Sim.Match
                 if (!offensiveRebound) _possession.Flip();
                 StartPossession(offensiveRebound ? false : true);
             }
+            else if (pe == PossessionEvent.Turnover)
+            {
+                _possession.Flip();
+                StartPossession(true);
+            }
 
             return new TickReport(pe, pe == PossessionEvent.None ? -1 : who);
         }
@@ -83,7 +95,9 @@ namespace Shift9.Sim.Match
             bool offenseIsHome = _possession.HomeOnOffense;
             bool attackHomeBasket = !offenseIsHome; // home attacks +z (away basket), away attacks -z
             ulong seed = _master.NextULong();
-            _current = new PossessionSim(seed, _scoreboard, offenseIsHome, attackHomeBasket);
+            AttributeProfile[] offenseAttrs = offenseIsHome ? _homeAttrs : _awayAttrs;
+            AttributeProfile[] defenseAttrs = offenseIsHome ? _awayAttrs : _homeAttrs;
+            _current = new PossessionSim(seed, _scoreboard, offenseIsHome, attackHomeBasket, offenseAttrs, defenseAttrs);
             _clock.ResetShotClock(fullShotClock);
         }
     }
