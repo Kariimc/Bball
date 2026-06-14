@@ -1,0 +1,26 @@
+{
+    "name": "Shift9.Integration.Tests",
+    "rootNamespace": "Shift9.Integration.Tests",
+    "references": [
+        "Shift9.Integration",
+        "Shift9.Customization",
+        "Shift9.Sim",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
