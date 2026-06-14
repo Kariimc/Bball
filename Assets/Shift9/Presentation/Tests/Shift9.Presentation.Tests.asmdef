@@ -1,0 +1,25 @@
+{
+    "name": "Shift9.Presentation.Tests",
+    "rootNamespace": "Shift9.Presentation.Tests",
+    "references": [
+        "Shift9.Presentation",
+        "Shift9.Sim",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
