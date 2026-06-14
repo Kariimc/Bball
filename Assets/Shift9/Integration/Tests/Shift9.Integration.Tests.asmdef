@@ -5,6 +5,7 @@
         "Shift9.Integration",
         "Shift9.Customization",
         "Shift9.Sim",
+        "Shift9.Presentation",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

@@ -3,7 +3,8 @@
     "rootNamespace": "Shift9.Integration",
     "references": [
         "Shift9.Customization",
-        "Shift9.Sim"
+        "Shift9.Sim",
+        "Shift9.Presentation"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
