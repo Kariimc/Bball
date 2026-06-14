@@ -55,6 +55,10 @@ Camera/bench convention used below (chosen to match the frames, see §3):
   scorer's table and LED table are therefore on the **far (`+x`) sideline**.
 - Camera height / exact setback: **[FLAG]** not derivable.
 
+Reproduced by `Assets/Shift9/Presentation/BroadcastCamera.cs` — a fixed rig off the `-x`
+sideline that yaws/tilts to follow play. Reference-matched defaults (all **[FLAG]** for
+on-screen tuning): setback 16 ft, height 18 ft, look-height 7 ft, FOV 30°, full length-follow.
+
 ## 4. Element catalog (literal observations)
 
 | Element | Observed in frames (literal) | Mapped position | Confidence |
