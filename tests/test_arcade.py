@@ -14,7 +14,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from arcade_adapter import (  # noqa: E402
-    to_arcade_stats, build_arcade_team, get_arcade_matchup, ARCADE_KEYS,
+    to_arcade_stats, build_arcade_team, get_arcade_matchup, get_arcade_lineup,
+    ARCADE_KEYS,
 )
 from rosters import all_teams  # noqa: E402
 from team_import import load_team_data_from_file, register_imported_team  # noqa: E402
@@ -58,12 +59,18 @@ class TestTeamBuilding(unittest.TestCase):
                 self.assertIn("name", p)
                 self.assertEqual(set(p["stats"].keys()), set(ARCADE_KEYS))
 
-    def test_matchup_returns_names_and_players(self):
+    def test_matchup_returns_five_on_five(self):
         hn, hp, an, ap = get_arcade_matchup("BOS", "DEN")
         self.assertEqual(hn, "Boston Shamrocks")
         self.assertEqual(an, "Denver Altitude")
-        self.assertGreaterEqual(len(hp), 5)
-        self.assertGreaterEqual(len(ap), 5)
+        self.assertEqual(len(hp), 5)
+        self.assertEqual(len(ap), 5)
+
+    def test_lineup_covers_all_positions(self):
+        for key in all_teams():
+            lineup = get_arcade_lineup(key)
+            self.assertEqual(len(lineup), 5)
+            self.assertEqual({p["role"] for p in lineup}, {"PG", "SG", "SF", "PF", "C"})
 
     def test_imported_team_flows_into_arcade(self):
         register_imported_team(load_team_data_from_file(TEMPLATE, key="ARCT"))

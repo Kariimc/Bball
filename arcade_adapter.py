@@ -53,8 +53,25 @@ def build_arcade_team(key: str) -> List[Dict[str, Any]]:
     return players
 
 
-def get_arcade_matchup(home_key: str, away_key: str
+def get_arcade_lineup(key: str, size: int = 5) -> List[Dict[str, Any]]:
+    """A starting lineup that covers PG/SG/SF/PF/C, then fills by overall."""
+    players = build_arcade_team(key)
+    chosen: List[Dict[str, Any]] = []
+    for role in ("PG", "SG", "SF", "PF", "C"):
+        for p in players:
+            if p["role"] == role and p not in chosen:
+                chosen.append(p)
+                break
+    for p in players:
+        if len(chosen) >= size:
+            break
+        if p not in chosen:
+            chosen.append(p)
+    return chosen[:size]
+
+
+def get_arcade_matchup(home_key: str, away_key: str, size: int = 5
                        ) -> Tuple[str, List[Dict[str, Any]], str, List[Dict[str, Any]]]:
-    """Resolve two team keys into (home_name, home_players, away_name, away_players)."""
-    return (team_name(home_key), build_arcade_team(home_key),
-            team_name(away_key), build_arcade_team(away_key))
+    """Resolve two team keys into (home_name, home_five, away_name, away_five)."""
+    return (team_name(home_key), get_arcade_lineup(home_key, size),
+            team_name(away_key), get_arcade_lineup(away_key, size))

@@ -15,6 +15,7 @@ from court_rules import (  # noqa: E402
     point_value, is_scoring_position, in_bounds, format_clock,
     target_hoop, HOME_HOOP, AWAY_HOOP, COURT_LENGTH, COURT_WIDTH,
     THREE_POINT_DIST, RIM_Z_LOW, RIM_Z_HIGH,
+    make_probability, offensive_spot,
 )
 
 
@@ -71,6 +72,37 @@ class TestBoundsAndClock(unittest.TestCase):
         self.assertEqual(format_clock(125), "2:05")
         self.assertEqual(format_clock(0), "0:00")
         self.assertEqual(format_clock(-5), "0:00")  # never negative
+
+
+class TestShotModel(unittest.TestCase):
+    def test_closer_is_more_likely(self):
+        self.assertGreater(make_probability(8, 4), make_probability(8, 25))
+
+    def test_skill_helps(self):
+        self.assertGreater(make_probability(9, 15), make_probability(3, 15))
+
+    def test_contest_hurts(self):
+        self.assertLess(make_probability(7, 20, True), make_probability(7, 20, False))
+
+    def test_always_clamped(self):
+        self.assertGreaterEqual(make_probability(1, 40, True), 0.05)
+        self.assertLessEqual(make_probability(10, 1), 0.95)
+
+
+class TestFormation(unittest.TestCase):
+    def test_five_distinct_in_bounds_spots(self):
+        for team in ("home", "away"):
+            spots = [offensive_spot(team, r) for r in ("PG", "SG", "SF", "PF", "C")]
+            self.assertEqual(len(set(spots)), 5)
+            for x, y in spots:
+                self.assertTrue(in_bounds(x, y))
+
+    def test_home_and_away_space_toward_own_hoop(self):
+        # Home spaces toward the right (high x); away toward the left (low x).
+        home_pg = offensive_spot("home", "PG")
+        away_pg = offensive_spot("away", "PG")
+        self.assertGreater(home_pg[0], COURT_LENGTH / 2)
+        self.assertLess(away_pg[0], COURT_LENGTH / 2)
 
 
 if __name__ == "__main__":

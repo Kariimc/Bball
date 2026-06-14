@@ -14,19 +14,29 @@ registry — so one change propagates everywhere.
 
 ```bash
 pip install pygame
-python voxel_hoops.py                       # Boston vs Denver
-python voxel_hoops.py --home OKC --away MIN
+python voxel_hoops.py                        # opens the team-select menu
+python voxel_hoops.py --home OKC --away MIN --no-menu
 python voxel_hoops.py --import-url https://example.com/team.json
 ```
 
-**Controls:** `WASD`/arrows move · `Space` catch / shoot / dunk · `E` strip
-steal · `R` rematch · `Esc` quit.
+**Menu:** `←/→` pick HOME, `↑/↓` pick AWAY, `Enter` tip off. You control HOME.
 
-**It's a real match:** two-way scoring (each team attacks its own hoop), 2- and
-3-pointers by distance, a quarter clock with 4 quarters + overtime, AI that
-chases loose balls and drives to the rim to score, possession resets after
-makes, out-of-bounds turnovers, a final/rematch screen, and Steam achievements
-(first basket, dunk, clean steal, buzzer-beater, comeback win).
+**In game:** `WASD`/arrows move · `Space` shoot / dunk / catch · `E` strip steal
+· `R` back to team select · `Esc` quit. You always control the **ball-carrier**
+(or the nearest defender when the other team has it) — control switches
+automatically.
+
+**It's a real match:** full **5-on-5** with team AI (spacing, drives, passing,
+man-to-man defense, steals), two-way scoring with 2- and 3-pointers by distance,
+a distance/skill/contest **shot model**, a quarter clock with 4 quarters +
+overtime, possession resets after makes, out-of-bounds turnovers, a team-select
+menu, a final/rematch screen, and Steam achievements (first basket, dunk, clean
+steal, buzzer-beater, comeback win).
+
+**Tuning:** pace/scoring knobs live at the top of `voxel_hoops.py`
+(`QUARTER_SECONDS`, `AI_SHOOT_CHANCE_*`, `AI_DUNK_CHANCE`); the shot-make curve
+is `make_probability()` in `court_rules.py`. Defaults are conservative starting
+points — tweak after a live playtest.
 
 ## Files
 

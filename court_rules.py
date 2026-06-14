@@ -23,7 +23,7 @@ RIM_Z_HIGH = 16.0
 SCORE_RADIUS = 2.6          # how close (x,y) must be to the rim to drop in
 THREE_POINT_DIST = 22.0     # >= this from the hoop counts as a three
 DUNK_RANGE = 18.0           # close enough to attempt a dunk
-SHOOT_RANGE = 30.0          # AI won't heave from beyond this
+SHOOT_RANGE = 24.0          # AI won't shoot (and rarely heaves) beyond this
 
 HOME_HOOP: Tuple[float, float] = (COURT_LENGTH - 4, COURT_WIDTH / 2)   # right
 AWAY_HOOP: Tuple[float, float] = (4, COURT_WIDTH / 2)                  # left
@@ -57,3 +57,33 @@ def in_bounds(x: float, y: float) -> bool:
 def format_clock(seconds: float) -> str:
     seconds = max(0, int(seconds))
     return f"{seconds // 60}:{seconds % 60:02d}"
+
+
+# -- 5-on-5 spacing -----------------------------------------------------------
+# Half-court offensive spots by role, in court feet. Home attacks the right
+# hoop (~x=90); away attacks the left (~x=4). These are mirror images.
+OFFENSE_FORMATION = {
+    "home": {"PG": (66, 25), "SG": (74, 13), "SF": (74, 37), "PF": (82, 18), "C": (85, 32)},
+    "away": {"PG": (28, 25), "SG": (20, 13), "SF": (20, 37), "PF": (12, 18), "C": (9, 32)},
+}
+
+
+def offensive_spot(team: str, role: str) -> Tuple[float, float]:
+    """Where a player should space to when their team has the ball."""
+    return OFFENSE_FORMATION[team].get(role, (COURT_LENGTH / 2, COURT_WIDTH / 2))
+
+
+# -- shot model (tunable, deterministic-on-launch) ----------------------------
+def make_probability(shooting: int, dist: float, contested: bool = False) -> float:
+    """Probability a shot drops, from a 1-10 shooting rating and distance (ft).
+    Decoupled from projectile physics so scoring is reliable and tunable."""
+    if dist < 8.0:
+        base = 0.60          # layup / close range
+    elif dist < THREE_POINT_DIST:
+        base = 0.44          # mid-range
+    else:
+        base = 0.36          # three
+    base += (shooting - 5) * 0.025
+    if contested:
+        base -= 0.15
+    return max(0.05, min(0.95, base))
