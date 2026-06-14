@@ -1,6 +1,7 @@
 using Shift9.Presentation.Animation;
 using Shift9.Sim.Core;
 using Shift9.Sim.Match;
+using Shift9.Sim.Moves;
 using UnityEngine;
 
 namespace Shift9.Presentation
@@ -57,10 +58,27 @@ namespace Shift9.Presentation
                 {
                     PlayerActionTrigger trigger = AnimationEvents.TriggerFor(report.Event);
                     if (trigger != PlayerActionTrigger.None) _drivers[report.PlayerIndex].Fire(trigger);
+                    if (report.Event == PossessionEvent.ShotReleased) FireShotMoves(report.PlayerIndex);
                 }
                 _accumulator -= dt;
             }
             Sync();
+        }
+
+        // On a shot, play the inside finish (or a signature crossover for a jumper) on the shooter,
+        // and a signature block on the rim protector who denied it.
+        private void FireShotMoves(int shooter)
+        {
+            int finishId = MoveAnimation.Id(_sim.LastFinishMove);
+            if (finishId != MoveAnimation.None) _drivers[shooter].FireMove(finishId);
+            else if (_sim.LastDribbleMove == DribbleMove.SignatureCrossover)
+                _drivers[shooter].FireMove(MoveAnimation.Id(DribbleMove.SignatureCrossover));
+
+            if (_sim.LastBlock == DefenseMove.SignatureBlock)
+            {
+                int b = _sim.LastBlockerIndex;
+                if (b >= 0 && b < _drivers.Length) _drivers[b].FireMove(MoveAnimation.BlockId);
+            }
         }
 
         private void BuildVisuals()

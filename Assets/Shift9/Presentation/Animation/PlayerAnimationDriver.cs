@@ -17,6 +17,8 @@ namespace Shift9.Presentation.Animation
         public static readonly int ShootTrigger = Animator.StringToHash("Shoot");
         public static readonly int PassTrigger = Animator.StringToHash("Pass");
         public static readonly int ReboundTrigger = Animator.StringToHash("Rebound");
+        public static readonly int MoveIdParam = Animator.StringToHash("MoveId");
+        public static readonly int DoMoveTrigger = Animator.StringToHash("DoMove");
 
         [SerializeField] private Animator _animator;
         [SerializeField] private float _maxSpeed = 14f; // matches the sim's player speed (ft/s)
@@ -58,6 +60,14 @@ namespace Shift9.Presentation.Animation
                 case PlayerActionTrigger.Pass:    _animator.SetTrigger(PassTrigger); break;
                 case PlayerActionTrigger.Rebound: _animator.SetTrigger(ReboundTrigger); break;
             }
+        }
+
+        /// <summary>Play a specific signature/finish/block move by its MoveId (0 = none).</summary>
+        public void FireMove(int moveId)
+        {
+            if (!Ready || moveId == MoveAnimation.None) return;
+            _animator.SetInteger(MoveIdParam, moveId);
+            _animator.SetTrigger(DoMoveTrigger);
         }
 
         private void OnEnable()

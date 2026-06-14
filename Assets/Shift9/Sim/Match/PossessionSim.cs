@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Shift9.Sim.Ball;
 using Shift9.Sim.Core;
 using Shift9.Sim.Defense;
+using Shift9.Sim.Moves;
 using Shift9.Sim.Players;
 using Shift9.Sim.Rules;
 using Shift9.Sim.Shooting;
@@ -82,6 +83,12 @@ namespace Shift9.Sim.Match
         private Vector3 _ballGround;
         private bool _reboundOffensive;
 
+        private DribbleMove _lastDribble = DribbleMove.None;
+        private FinishMove _lastFinish = FinishMove.JumpShot;
+        private DefenseMove _lastBlock = DefenseMove.Contest;
+        private int _lastBlockerIndex = -1;
+        private bool _crossoverOpen;
+
         public PossessionPhase Phase => _phase;
         public int HomeScore => _scoreboard.HomeScore;
         public int AwayScore => _scoreboard.AwayScore;
@@ -91,6 +98,10 @@ namespace Shift9.Sim.Match
         public ShotZone LastShotZone => _shotZone;
         public bool LastReboundOffensive => _reboundOffensive;
         public int LastEventPlayer => _lastEventPlayer;
+        public DribbleMove LastDribbleMove => _lastDribble;
+        public FinishMove LastFinishMove => _lastFinish;
+        public DefenseMove LastBlock => _lastBlock;
+        public int LastBlockerIndex => _lastBlockerIndex;
 
         public int BallHolderIndex
         {
@@ -224,6 +235,9 @@ namespace Shift9.Sim.Match
                 if (!_driveStarted)
                 {
                     _driveStarted = true;
+                    bool pressured = FlatDist(_players[PlayersPerTeam + _shooter].Position, _players[_shooter].Position) < 5f;
+                    _lastDribble = MoveSelector.SelectDribble(_players[_shooter].Attributes, pressured, ref _rng);
+                    if (_lastDribble == DribbleMove.SignatureCrossover) _crossoverOpen = true; // defender stumbles
                     if (HandleLost(_shooter)) return Turnover(_shooter);
                     _players[_shooter].Target = Vector3.Lerp(Flat(_players[_shooter].Position), BasketFloor, DriveFraction);
                 }
@@ -301,6 +315,20 @@ namespace Shift9.Sim.Match
                 defenders[i] = new DefenderState(_players[PlayersPerTeam + i].Position, contest);
             }
             float openness = OpennessCalculator.Compute(spot, _attackHomeBasket, defenders);
+            if (_crossoverOpen) { openness = Mathf.Min(1f, openness + 0.25f); _crossoverOpen = false; } // crossover space
+            bool contested = openness < 0.5f;
+
+            // Inside: pick a finish (dunk/layup/floater/signature) and let an elite rim protector block it.
+            _lastFinish = FinishMove.JumpShot;
+            _lastBlock = DefenseMove.Contest;
+            _lastBlockerIndex = -1;
+            bool blocked = false;
+            if (inside)
+            {
+                _lastFinish = MoveSelector.SelectFinish(_players[shooter].Attributes, zone == ShotZone.AtRim, contested, ref _rng);
+                _lastBlock = MoveSelector.SelectBlock(_players[PlayersPerTeam + shooter].Attributes, ref _rng);
+                if (_lastBlock == DefenseMove.SignatureBlock) { blocked = true; _lastBlockerIndex = PlayersPerTeam + shooter; }
+            }
 
             var ctx = new ShotContext
             {
@@ -314,7 +342,7 @@ namespace Shift9.Sim.Match
             };
 
             ShotResult result = ShotResolver.Resolve(ctx, ref _rng, ShotModelConfig.Default);
-            _shotMade = result.Made;
+            _shotMade = result.Made && !blocked; // an elite block denies the bucket
             _shotZone = result.Zone;
 
             Vector3 from = spot + new Vector3(0f, ReleaseHeight, 0f);

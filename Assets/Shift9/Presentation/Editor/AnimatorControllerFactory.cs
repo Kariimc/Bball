@@ -28,6 +28,8 @@ namespace Shift9.Presentation.Editor
             controller.AddParameter("Shoot", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Pass", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Rebound", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("MoveId", AnimatorControllerParameterType.Int);
+            controller.AddParameter("DoMove", AnimatorControllerParameterType.Trigger);
 
             AnimatorState state = controller.CreateBlendTreeInController("Locomotion", out BlendTree tree);
             tree.blendType = BlendTreeType.Simple1D;

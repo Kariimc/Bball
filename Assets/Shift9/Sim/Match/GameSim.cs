@@ -1,4 +1,5 @@
 using Shift9.Sim.Core;
+using Shift9.Sim.Moves;
 using Shift9.Sim.Players;
 using Shift9.Sim.Rules;
 using UnityEngine;
@@ -45,6 +46,10 @@ namespace Shift9.Sim.Match
         public SimPlayerState GetPlayer(int i) => _current.GetPlayer(i);
         public Vector3 BallPosition => _current.BallPosition;
         public int BallHolderIndex => _current.BallHolderIndex;
+        public DribbleMove LastDribbleMove => _current.LastDribbleMove;
+        public FinishMove LastFinishMove => _current.LastFinishMove;
+        public DefenseMove LastBlock => _current.LastBlock;
+        public int LastBlockerIndex => _current.LastBlockerIndex;
 
         public GameSim(ulong seed, float quarterLength = 720f, int numQuarters = 4,
             AttributeProfile[] homeRoster = null, AttributeProfile[] awayRoster = null)
