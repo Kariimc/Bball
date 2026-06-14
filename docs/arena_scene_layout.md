@@ -70,7 +70,7 @@ Height within 20–40 ft and FOV remain free to taste — a one-line Inspector t
 | Painted key (×2) | **BLACK** paint, white border, **dashed** lane + restricted lines, faint team logo inside | each key, baseline-end | high |
 | 3-pt arc / lines | Standard arc + straight corners | per `SimConstants` (ArcRadius 23.75, CornerThreeX 22) | high |
 | Apron branding | "Michelob ULTRA", "Finals", NBA logoman near keys | court apron, `+x` & baseline | high |
-| Backboard (×2) | Clear rectangular board on each baseline | `z=±43.0` = **4.0 ft over the court from baseline** (regulation; matches BackboardInset 1.25 behind hoop) | high (color of shooter's square **[FLAG]**) |
+| Backboard (×2) | **Clear glass**, **white** outer border + **white** shooter's square, **orange** rim, **white** net, **grey padded** mount arm (reference closeup) | `z=±43.0` = **4.0 ft over the court from baseline** (regulation; matches BackboardInset 1.25 behind hoop) | high |
 | Stanchion + pad (×2) | Padded base behind each backboard, **"State Farm"** red logo on front pad | base **5–8 ft behind baseline** (user reference, "overhang"): `z≈±53` at a 6 ft setback | high (presence) / setback now sourced |
 | Shot-clock | Red digits at top of frame above the boards | on top of each backboard **[FLAG: could be arena fascia]** | **[FLAG]** |
 | Referees | Dark/black uniforms on court; a ref by the lane bears **#39**; others mid-court | on-court, `R` marks above; **count per frame is partial** | medium; exact count **[FLAG]** |
@@ -83,7 +83,8 @@ Height within 20–40 ft and FOV remain free to taste — a one-line Inspector t
 
 ## 5. Open ambiguities — DO NOT GUESS (flagged for the user)
 
-1. **Shooter's-square / backboard branding color** — not legible.
+1. ~~Shooter's-square / backboard color — not legible.~~ **RESOLVED via reference closeup:**
+   clear glass, white square + white border, orange rim, white net, grey padded arm.
 2. **Red digit blocks at frame top** — shot-clock-on-backboard vs. arena fascia scoreboard: unresolved.
 3. ~~Stanchion setback / camera height — not derivable from photos.~~ **RESOLVED via user reference:**
    stanchion base 5–8 ft behind baseline (`z≈±53`); broadcast cam 20–40 ft high, 10–25° tilt
