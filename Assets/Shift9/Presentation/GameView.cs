@@ -1,3 +1,4 @@
+using Shift9.Presentation.Animation;
 using Shift9.Sim.Core;
 using Shift9.Sim.Match;
 using UnityEngine;
@@ -67,6 +68,7 @@ namespace Shift9.Presentation
                 go.name = "Player_" + i;
                 go.transform.SetParent(transform, false);
                 go.transform.localScale = new Vector3(_playerWidth, _playerHeight * 0.5f, _playerWidth);
+                go.AddComponent<PlayerAnimationDriver>(); // cosmetic locomotion; animates once a rig is added
                 _playerViews[i] = go.transform;
                 _playerRenderers[i] = go.GetComponent<Renderer>();
             }
