@@ -180,17 +180,9 @@ namespace Shift9.Presentation.Court
         private void Paint(GameObject go, Color color)
         {
             var r = go.GetComponent<Renderer>();
-            if (r != null) r.sharedMaterial = SolidMaterial(color);
+            if (r != null) r.sharedMaterial = MaterialUtil.Solid(color);
         }
 
-        private static Material SolidMaterial(Color color)
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find("Standard");
-            var m = new Material(shader);
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
-            if (m.HasProperty("_Color")) m.SetColor("_Color", color);
-            return m;
-        }
+        private static Material SolidMaterial(Color color) => MaterialUtil.Solid(color);
     }
 }
