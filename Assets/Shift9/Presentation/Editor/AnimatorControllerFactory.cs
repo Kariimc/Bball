@@ -23,6 +23,11 @@ namespace Shift9.Presentation.Editor
 
             AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(Path);
             controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
+            controller.AddParameter("HasBall", AnimatorControllerParameterType.Bool);
+            controller.AddParameter("IsDefending", AnimatorControllerParameterType.Bool);
+            controller.AddParameter("Shoot", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Pass", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Rebound", AnimatorControllerParameterType.Trigger);
 
             AnimatorState state = controller.CreateBlendTreeInController("Locomotion", out BlendTree tree);
             tree.blendType = BlendTreeType.Simple1D;
@@ -36,7 +41,8 @@ namespace Shift9.Presentation.Editor
 
             AssetDatabase.SaveAssets();
             EditorGUIUtility.PingObject(controller);
-            Debug.Log($"Created locomotion controller at {Path}. Assign Idle/Jog/Sprint clips to the blend tree.");
+            Debug.Log($"Created locomotion controller at {Path}. Assign Idle/Jog/Sprint clips to the blend tree, " +
+                      "and add action states/clips driven by HasBall / IsDefending / Shoot / Pass / Rebound.");
         }
     }
 }

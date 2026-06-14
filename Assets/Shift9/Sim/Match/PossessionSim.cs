@@ -10,7 +10,7 @@ using UnityEngine;
 namespace Shift9.Sim.Match
 {
     public enum PossessionPhase : byte { BringUp, Playmaking, Shooting, Rebound, Made, Missed }
-    public enum PossessionEvent : byte { None, ShotReleased, ShotMade, ShotMissed }
+    public enum PossessionEvent : byte { None, ShotReleased, ShotMade, ShotMissed, Pass }
 
     public struct SimPlayerState
     {
@@ -68,11 +68,14 @@ namespace Shift9.Sim.Match
         // Playmaking
         private int[] _passChain;
         private int _passLeg;
+        private int _announcedLeg = -1;
         private float _passT;
         private int _holder;
         private int _shooter;
         private bool _drive;
         private bool _driveStarted;
+
+        private int _lastEventPlayer = -1;
 
         // Outcome
         private bool _shotMade;
@@ -88,6 +91,21 @@ namespace Shift9.Sim.Match
         public Vector3 BallPosition => _ballInFlight ? _ball.Position : _ballHeld;
         public ShotZone LastShotZone => _shotZone;
         public bool LastReboundOffensive => _reboundOffensive;
+        public int LastEventPlayer => _lastEventPlayer;
+
+        /// <summary>Offensive player currently holding the ball, or -1 when it is in the air/loose.</summary>
+        public int BallHolderIndex
+        {
+            get
+            {
+                if (_ballInFlight || _phase == PossessionPhase.Rebound ||
+                    _phase == PossessionPhase.Made || _phase == PossessionPhase.Missed)
+                    return -1;
+                if (_phase == PossessionPhase.Playmaking && _passChain != null && _passLeg < _passChain.Length - 1)
+                    return -1; // ball is mid-pass
+                return _holder;
+            }
+        }
 
         private Vector3 Basket => _attackHomeBasket ? SimConstants.HoopHome : SimConstants.HoopAway;
         private Vector3 BasketFloor => new Vector3(Basket.x, 0f, Basket.z);
@@ -171,6 +189,7 @@ namespace Shift9.Sim.Match
             _drive = _rng.NextFloat() < DriveChance;
 
             _passLeg = 0;
+            _announcedLeg = -1;
             _passT = 0f;
             _holder = 0;
             _driveStarted = false;
@@ -187,6 +206,12 @@ namespace Shift9.Sim.Match
             {
                 int from = _passChain[_passLeg];
                 int to = _passChain[_passLeg + 1];
+                if (_announcedLeg != _passLeg)
+                {
+                    _announcedLeg = _passLeg;
+                    _lastEventPlayer = from; // the passer
+                    return PossessionEvent.Pass;
+                }
                 _passT += dt / PassDuration(from, to);
                 _ballHeld = Vector3.Lerp(ChestPos(from), ChestPos(to), Mathf.Clamp01(_passT));
                 if (_passT >= 1f) { _passLeg++; _holder = _passChain[_passLeg]; _passT = 0f; }
@@ -219,6 +244,7 @@ namespace Shift9.Sim.Match
             {
                 _scoreboard.AddBasket(_offenseIsHome, _shotZone);
                 _phase = PossessionPhase.Made;
+                _lastEventPlayer = _shooter;
                 return PossessionEvent.ShotMade;
             }
             if (_ball.Position.y <= FloorTouch)
@@ -258,6 +284,7 @@ namespace Shift9.Sim.Match
                 if (score < bestScore) { bestScore = score; best = i; }
             }
             _reboundOffensive = _players[best].IsOffense;
+            _lastEventPlayer = best;
             _phase = PossessionPhase.Missed;
             return PossessionEvent.ShotMissed;
         }
@@ -298,6 +325,7 @@ namespace Shift9.Sim.Match
             _ballInFlight = true;
             _phase = PossessionPhase.Shooting;
             _phaseTime = 0f;
+            _lastEventPlayer = shooter;
             return PossessionEvent.ShotReleased;
         }
 

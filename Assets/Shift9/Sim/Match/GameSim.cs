@@ -4,6 +4,15 @@ using UnityEngine;
 
 namespace Shift9.Sim.Match
 {
+    /// <summary>What happened on a single game tick: the event and the player it belongs to.</summary>
+    public readonly struct TickReport
+    {
+        public readonly PossessionEvent Event;
+        public readonly int PlayerIndex; // -1 when none
+        public TickReport(PossessionEvent ev, int playerIndex) { Event = ev; PlayerIndex = playerIndex; }
+        public static readonly TickReport None = new TickReport(PossessionEvent.None, -1);
+    }
+
     /// <summary>
     /// A continuous deterministic game: runs possession after possession with the game clock and
     /// shot clock running, alternating offense on makes/turnovers and resolving rebounds on misses
@@ -32,6 +41,7 @@ namespace Shift9.Sim.Match
         public int PlayerCount => _current.PlayerCount;
         public SimPlayerState GetPlayer(int i) => _current.GetPlayer(i);
         public Vector3 BallPosition => _current.BallPosition;
+        public int BallHolderIndex => _current.BallHolderIndex;
 
         public GameSim(ulong seed, float quarterLength = 720f, int numQuarters = 4)
         {
@@ -40,16 +50,18 @@ namespace Shift9.Sim.Match
             StartPossession(fullShotClock: true);
         }
 
-        public void Tick(float dt)
+        public TickReport Tick(float dt)
         {
-            if (_clock.GameOver) return;
+            if (_clock.GameOver) return TickReport.None;
 
             ClockEvent ce = _clock.Tick(dt);
-            if (ce == ClockEvent.GameEnded) return;
-            if (ce == ClockEvent.QuarterEnded) { _clock.AdvanceQuarter(); StartPossession(true); return; }
-            if (ce == ClockEvent.ShotClockViolation) { _possession.Flip(); StartPossession(true); return; }
+            if (ce == ClockEvent.GameEnded) return TickReport.None;
+            if (ce == ClockEvent.QuarterEnded) { _clock.AdvanceQuarter(); StartPossession(true); return TickReport.None; }
+            if (ce == ClockEvent.ShotClockViolation) { _possession.Flip(); StartPossession(true); return TickReport.None; }
 
             PossessionEvent pe = _current.Tick(dt);
+            int who = _current.LastEventPlayer; // capture before a new possession replaces _current
+
             if (pe == PossessionEvent.ShotMade)
             {
                 _possession.Flip();
@@ -62,6 +74,8 @@ namespace Shift9.Sim.Match
                 if (!offensiveRebound) _possession.Flip();
                 StartPossession(offensiveRebound ? false : true);
             }
+
+            return new TickReport(pe, pe == PossessionEvent.None ? -1 : who);
         }
 
         private void StartPossession(bool fullShotClock)

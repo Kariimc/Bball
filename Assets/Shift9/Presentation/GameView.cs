@@ -28,6 +28,7 @@ namespace Shift9.Presentation
         /// <summary>The live game, for HUDs/overlays to read.</summary>
         public GameSim Sim => _sim;
         private Renderer[] _playerRenderers;
+        private PlayerAnimationDriver[] _drivers;
         private Transform _ballView;
         private Material _homeMat;
         private Material _awayMat;
@@ -51,7 +52,12 @@ namespace Shift9.Presentation
             int guard = 0;
             while (_accumulator >= dt && guard++ < 8)
             {
-                _sim.Tick(dt);
+                TickReport report = _sim.Tick(dt);
+                if (report.PlayerIndex >= 0 && report.PlayerIndex < _drivers.Length)
+                {
+                    PlayerActionTrigger trigger = AnimationEvents.TriggerFor(report.Event);
+                    if (trigger != PlayerActionTrigger.None) _drivers[report.PlayerIndex].Fire(trigger);
+                }
                 _accumulator -= dt;
             }
             Sync();
@@ -62,13 +68,14 @@ namespace Shift9.Presentation
             int count = _sim.PlayerCount;
             _playerViews = new Transform[count];
             _playerRenderers = new Renderer[count];
+            _drivers = new PlayerAnimationDriver[count];
             for (int i = 0; i < count; i++)
             {
                 var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 go.name = "Player_" + i;
                 go.transform.SetParent(transform, false);
                 go.transform.localScale = new Vector3(_playerWidth, _playerHeight * 0.5f, _playerWidth);
-                go.AddComponent<PlayerAnimationDriver>(); // cosmetic locomotion; animates once a rig is added
+                _drivers[i] = go.AddComponent<PlayerAnimationDriver>(); // cosmetic; animates once a rig is added
                 _playerViews[i] = go.transform;
                 _playerRenderers[i] = go.GetComponent<Renderer>();
             }
@@ -85,12 +92,16 @@ namespace Shift9.Presentation
 
         private void Sync()
         {
+            int holder = _sim.BallHolderIndex;
             for (int i = 0; i < _playerViews.Length; i++)
             {
                 SimPlayerState s = _sim.GetPlayer(i);
                 _playerViews[i].localPosition = new Vector3(s.Position.x, _playerHeight * 0.5f, s.Position.z);
                 if (_playerRenderers[i] != null)
                     _playerRenderers[i].sharedMaterial = s.IsHomeTeam ? _homeMat : _awayMat;
+
+                _drivers[i].SetHasBall(i == holder);
+                _drivers[i].SetDefending(!s.IsOffense);
             }
             _ballView.localPosition = _sim.BallPosition;
         }

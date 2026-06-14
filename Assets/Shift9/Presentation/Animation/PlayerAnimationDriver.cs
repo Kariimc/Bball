@@ -12,6 +12,11 @@ namespace Shift9.Presentation.Animation
     public sealed class PlayerAnimationDriver : MonoBehaviour
     {
         public static readonly int SpeedParam = Animator.StringToHash("Speed");
+        public static readonly int HasBallParam = Animator.StringToHash("HasBall");
+        public static readonly int IsDefendingParam = Animator.StringToHash("IsDefending");
+        public static readonly int ShootTrigger = Animator.StringToHash("Shoot");
+        public static readonly int PassTrigger = Animator.StringToHash("Pass");
+        public static readonly int ReboundTrigger = Animator.StringToHash("Rebound");
 
         [SerializeField] private Animator _animator;
         [SerializeField] private float _maxSpeed = 14f; // matches the sim's player speed (ft/s)
@@ -24,6 +29,36 @@ namespace Shift9.Presentation.Animation
 
         public LocomotionState State { get; private set; }
         public float NormalizedSpeed => _normalized;
+        public bool HasBall { get; private set; }
+        public bool IsDefending { get; private set; }
+
+        private bool Ready => _animator != null && _animator.runtimeAnimatorController != null;
+
+        /// <summary>Ball-handling: dribble/triple-threat when holding, normal locomotion otherwise.</summary>
+        public void SetHasBall(bool value)
+        {
+            HasBall = value;
+            if (Ready) _animator.SetBool(HasBallParam, value);
+        }
+
+        /// <summary>Defensive posture: crouch/shuffle/contest when guarding.</summary>
+        public void SetDefending(bool value)
+        {
+            IsDefending = value;
+            if (Ready) _animator.SetBool(IsDefendingParam, value);
+        }
+
+        /// <summary>Fire a one-shot action (shot release / pass / rebound jump).</summary>
+        public void Fire(PlayerActionTrigger trigger)
+        {
+            if (!Ready) return;
+            switch (trigger)
+            {
+                case PlayerActionTrigger.Shoot:   _animator.SetTrigger(ShootTrigger); break;
+                case PlayerActionTrigger.Pass:    _animator.SetTrigger(PassTrigger); break;
+                case PlayerActionTrigger.Rebound: _animator.SetTrigger(ReboundTrigger); break;
+            }
+        }
 
         private void OnEnable()
         {
