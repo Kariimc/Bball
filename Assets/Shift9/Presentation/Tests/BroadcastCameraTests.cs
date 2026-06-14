@@ -44,6 +44,15 @@ namespace Shift9.Presentation.Tests
         }
 
         [Test]
+        public void Camera_DefaultTiltIsInBroadcastBand()
+        {
+            // Reference (NBA 2K broadcast / real arena cam): 10-25 deg downward tilt.
+            float tilt = BroadcastCamera.TiltDegrees(BroadcastCameraConfig.Default);
+            Assert.GreaterOrEqual(tilt, 10f);
+            Assert.LessOrEqual(tilt, 25f);
+        }
+
+        [Test]
         public void Camera_PassesThroughFieldOfView()
         {
             var cfg = BroadcastCameraConfig.Default;

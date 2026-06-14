@@ -32,7 +32,7 @@ namespace Shift9.Presentation
         public static BroadcastCameraConfig Default => new BroadcastCameraConfig
         {
             SidelineSetback = 16f,
-            Height = 18f,
+            Height = 20f,        // low end of the 20-40 ft real-arena range; yields ~18 deg tilt
             LengthOffset = 0f,
             LookHeight = 7f,
             LengthFollow = 1f,
@@ -75,6 +75,17 @@ namespace Shift9.Presentation
                 : Quaternion.identity;
 
             return new CameraPose(position, rotation, cfg.FieldOfView);
+        }
+
+        /// <summary>
+        /// Downward tilt (degrees below horizontal) the rig points at center court. Reference
+        /// broadcast angle sits in the 10-25 deg band; the default config lands ~18 deg.
+        /// </summary>
+        public static float TiltDegrees(in BroadcastCameraConfig cfg)
+        {
+            Vector3 fwd = ComputePose(cfg, Vector3.zero).Rotation * Vector3.forward;
+            float horizontal = new Vector2(fwd.x, fwd.z).magnitude;
+            return Mathf.Atan2(-fwd.y, horizontal) * Mathf.Rad2Deg;
         }
     }
 }

@@ -56,8 +56,10 @@ Camera/bench convention used below (chosen to match the frames, see §3):
 - Camera height / exact setback: **[FLAG]** not derivable.
 
 Reproduced by `Assets/Shift9/Presentation/BroadcastCamera.cs` — a fixed rig off the `-x`
-sideline that yaws/tilts to follow play. Reference-matched defaults (all **[FLAG]** for
-on-screen tuning): setback 16 ft, height 18 ft, look-height 7 ft, FOV 30°, full length-follow.
+sideline that yaws/tilts to follow play. Defaults: setback 16 ft, **height 20 ft**
+(low end of the cited 20–40 ft real-arena range), look-height 7 ft, FOV 30°, full
+length-follow → **~18° downward tilt**, inside the reference 10–25° band (test-verified).
+Height within 20–40 ft and FOV remain free to taste — a one-line Inspector tweak.
 
 ## 4. Element catalog (literal observations)
 
@@ -68,8 +70,8 @@ on-screen tuning): setback 16 ft, height 18 ft, look-height 7 ft, FOV 30°, full
 | Painted key (×2) | **BLACK** paint, white border, **dashed** lane + restricted lines, faint team logo inside | each key, baseline-end | high |
 | 3-pt arc / lines | Standard arc + straight corners | per `SimConstants` (ArcRadius 23.75, CornerThreeX 22) | high |
 | Apron branding | "Michelob ULTRA", "Finals", NBA logoman near keys | court apron, `+x` & baseline | high |
-| Backboard (×2) | Clear rectangular board on each baseline | `z=±43.0` (BackboardInset 1.25 behind hoop), board face `+/-` toward court | high (color of shooter's square **[FLAG]**) |
-| Stanchion + pad (×2) | Padded base behind each backboard, **"State Farm"** red logo on front pad | behind each baseline, `|z| > 47`, exact setback **[FLAG]** | high (presence) / **[FLAG]** (setback) |
+| Backboard (×2) | Clear rectangular board on each baseline | `z=±43.0` = **4.0 ft over the court from baseline** (regulation; matches BackboardInset 1.25 behind hoop) | high (color of shooter's square **[FLAG]**) |
+| Stanchion + pad (×2) | Padded base behind each backboard, **"State Farm"** red logo on front pad | base **5–8 ft behind baseline** (user reference, "overhang"): `z≈±53` at a 6 ft setback | high (presence) / setback now sourced |
 | Shot-clock | Red digits at top of frame above the boards | on top of each backboard **[FLAG: could be arena fascia]** | **[FLAG]** |
 | Referees | Dark/black uniforms on court; a ref by the lane bears **#39**; others mid-court | on-court, `R` marks above; **count per frame is partial** | medium; exact count **[FLAG]** |
 | Coaches | Figures **standing** at the far (`+x`) sideline, dark attire, in front of bench | line `x≈+25`, near mid-court | medium |
@@ -83,7 +85,9 @@ on-screen tuning): setback 16 ft, height 18 ft, look-height 7 ft, FOV 30°, full
 
 1. **Shooter's-square / backboard branding color** — not legible.
 2. **Red digit blocks at frame top** — shot-clock-on-backboard vs. arena fascia scoreboard: unresolved.
-3. **Stanchion setback** behind baseline and **camera height** — not metrically derivable from photos.
+3. ~~Stanchion setback / camera height — not derivable from photos.~~ **RESOLVED via user reference:**
+   stanchion base 5–8 ft behind baseline (`z≈±53`); broadcast cam 20–40 ft high, 10–25° tilt
+   (rig set to 20 ft / ~18°). Backboard overhang confirmed 4 ft from baseline.
 4. **Bench assignment** — which team's bench sits at the `-z` vs `+z` end is not consistent/legible across frames.
 5. **Referee count/positions** — only a partial subset is visible in any single frame (#39 by the lane confirmed).
 6. **Broadcast booth** — distinct commentary booth vs. the scorer's LED table is not separable in the frames; treated as co-located mid-table on the far side until clarified.
