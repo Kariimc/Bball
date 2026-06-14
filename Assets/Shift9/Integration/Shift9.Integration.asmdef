@@ -1,0 +1,17 @@
+{
+    "name": "Shift9.Integration",
+    "rootNamespace": "Shift9.Integration",
+    "references": [
+        "Shift9.Customization",
+        "Shift9.Sim"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
