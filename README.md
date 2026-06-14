@@ -50,10 +50,13 @@ points — tweak after a live playtest.
 | `team_import.py` | Import custom teams from a URL/file (validated, SSRF-guarded). |
 | `nba_comprehensive_game_engine.py` | Headless deterministic stats engine (sim, box scores, telemetry). |
 | `series.py` | Playoff layer: best-of-N series & brackets with persistent injuries. |
+| `game_events.py` | Tiny event bus: gameplay emits, presentation/officiating react. |
+| `presentation.py` | Crowd, mascot, cheerleaders, broadcast camera, benches, coaches. |
+| `officiating.py` | Referee AI, real-time violations/fouls, jump-ball kinematics, free-throw lanes. |
 | `sim_service.py` | Stdlib HTTP/subprocess service exposing the engine to any client. |
 | `godot/` | Godot 4 client (where you author 3D characters/animations). |
 | `examples/team_template.json` | Schema/template for a custom team. |
-| `tests/` | 91-test stdlib `unittest` suite. |
+| `tests/` | 125-test stdlib `unittest` suite. |
 
 ### Teams
 
@@ -77,6 +80,35 @@ python voxel_hoops.py --import-url https://example.com/team.json   # play it
 refuses non-public targets (loopback/private/link-local IPs), caps response
 size, and times out. Ratings are clamped; unknown stat keys are dropped. For
 trusted local dev, pass `--allow-private`.
+
+## Presentation & officiating (entities, ready for your models)
+
+Beyond the players, the full broadcast cast is simulated as **model-agnostic
+entities** that react to gameplay through `game_events.py` and emit serializable
+telemetry + *animation intents* — a renderer reads those and plays the matching
+clip on your 3D model. Nothing here depends on a renderer.
+
+- **Officiating** (`officiating.py`): `RefereeAI` (walks to the jump ball,
+  retrieves loose balls, hands off), `LiveOfficiatingEngine` (shot clock,
+  backcourt, closely-guarded, 3-second, traveling, double-dribble, carry, fouls
+  + bonus + last-two-minutes, technicals), `JumpBallSimulation` (gravity-true
+  tip + timing windows), `FreeThrowSystem` (lane placement + sequence).
+- **Presentation** (`presentation.py`): `DynamicCrowdSystem` (crowd states +
+  0-1 momentum), `EntertainmentManager` (mascot, cheerleaders, halftime show,
+  t-shirt cannon), `CameraDirector` (tracks ball, cuts to celebrations/crowd),
+  and `SidelineUnit` per team (bench mob + coach states: pacing, arguing,
+  timeout huddle, ejected).
+
+Both are wired into `NBAUnifiedEngine`: every game emits SCORE/DUNK/FOUL/
+PERIOD_END/INJURY/… events, the crowd/camera/benches/coaches react, and the
+result is exposed two ways — a compact `broadcast` snapshot on every possession,
+and the full `broadcast` block in the game summary.
+
+**Attaching your models/animations:** every athlete (`EntityProxy`) and every
+presentation `Actor` exposes `play_anim()`, `play_loop()`,
+`trigger_one_shot_action()`, and a `current_anim` / `active_animations` field.
+Your Godot (or other) renderer reads the entity's position + `current_anim` and
+drives the attached model — the names are the contract, the model is yours.
 
 ## Supporting systems (kept & wired up)
 

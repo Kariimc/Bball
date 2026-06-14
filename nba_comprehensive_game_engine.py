@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional, Sequence, Tuple, Any
 
+from game_events import GameEvent as GE  # standalone module: no import cycle
+
 # ==============================================================================
 # 1. STRUCTURAL GLOBAL ENUMS & CONFIGURATIONS
 # ==============================================================================
@@ -299,7 +301,10 @@ class EntityProxy:
         self.games_out: int = 0
         self.injury_note: str = ""
 
+        # Animation intents for an external renderer to consume (model-agnostic).
         self.animation_log: List[str] = []
+        self.active_animations: List[str] = []
+        self.current_anim_name: str = "Idle"
 
     def rating(self, key: str) -> int:
         return self.stats.get(key, DEFAULT_STATS.get(key, 70))
@@ -329,6 +334,24 @@ class EntityProxy:
         self.animation_log.append(
             f"EXEC: {state.name} at court coordinate ({self.position.x:.1f}, {self.position.z:.1f})"
         )
+
+    # -- model-agnostic animation hooks ---------------------------------------
+    # These record *animation intents* only; a renderer (Godot, etc.) reads
+    # `active_animations` / `current_anim_name` and plays the matching clip on
+    # the attached 3D model. The simulation never depends on a renderer.
+    def play_anim(self, name: str, speed_mult: float = 1.0) -> None:
+        """Queue a one-off animation intent (additive)."""
+        self.active_animations.append(f"{name}@{speed_mult:.2f}")
+        self.current_anim_name = name
+
+    def play_loop(self, name: str, speed_mult: float = 1.0) -> None:
+        """Set a single looping animation intent (replaces the queue)."""
+        self.active_animations = [f"{name}@loop@{speed_mult:.2f}"]
+        self.current_anim_name = name
+
+    def trigger_one_shot_action(self, name: str, weight: float = 1.0) -> None:
+        """Fire a blended one-shot action (e.g. a reaction) without clearing loops."""
+        self.active_animations.append(f"{name}#{weight:.2f}")
 
 
 class LiveBallObject:
@@ -1179,6 +1202,19 @@ class NBAUnifiedEngine:
         self.play_by_play: List[Dict[str, Any]] = []
         self.injuries: List[Dict[str, Any]] = []
 
+        # Broadcast / presentation / officiating layer. Wired to gameplay via an
+        # event bus; produces serializable telemetry + animation intents for a
+        # renderer to attach models/animations to. Lazy imports avoid a cycle.
+        from game_events import EventBus
+        from presentation import PresentationDirector
+        from officiating import LiveOfficiatingEngine, RefereeAI
+        self.bus = EventBus()
+        self.presentation = PresentationDirector(self.bus)
+        self.officiating = LiveOfficiatingEngine(self.bus)
+        self.broadcast_ball = LiveBallObject()
+        self.referees: List[RefereeAI] = [
+            RefereeAI(self.broadcast_ball, start=Vector3(x, 0.0, 47.0)) for x in (-5.0, 25.0, 55.0)]
+
         # Stepping state (populated by start_game()).
         self._teams: Dict[str, Team] = {}
         self._period: int = 0
@@ -1253,7 +1289,9 @@ class NBAUnifiedEngine:
         if gs.game_clock <= 0:
             if self._period >= 4 and not gs.is_tied():
                 self._game_over = True
+                self.bus.emit(GE.GAME_OVER, score=dict(gs.score))
                 return {"event": "GAME_OVER", "game_over": True, "summary": self.build_game_summary()}
+            self.bus.emit(GE.PERIOD_END, quarter=self._period)
             self._period += 1
             self._begin_period(self._period)
 
@@ -1285,6 +1323,10 @@ class NBAUnifiedEngine:
             result.setdefault("events", []).extend(i["event_text"] for i in injuries)
             result["new_injuries"] = injuries
 
+        self._emit_broadcast_events(result, off.side)
+        self.presentation.update(0.0)
+        result["broadcast"] = self.presentation.snapshot()
+
         self.play_by_play.append(result)
         if result.get("fast_break_for"):
             self._pending_fast_break = result["fast_break_for"]
@@ -1292,6 +1334,23 @@ class NBAUnifiedEngine:
             gs.possession_side = "AWAY" if gs.possession_side == "HOME" else "HOME"
         result["game_over"] = False
         return result
+
+    def _emit_broadcast_events(self, result: Dict[str, Any], off_side: str) -> None:
+        """Translate possession telemetry into events the presentation layer
+        reacts to (crowd, camera, mascot, benches, coaches)."""
+        pts = result.get("points", 0)
+        shot = result.get("shot", {})
+        if pts > 0:
+            self.bus.emit(GE.SCORE, team=off_side, points=pts,
+                          scorer=shot.get("shooter"), dunk=shot.get("is_dunk", False))
+            if shot.get("zone") == "THREE":
+                self.bus.emit(GE.MADE_THREE, team=off_side, scorer=shot.get("shooter"))
+            if shot.get("is_dunk"):
+                self.bus.emit(GE.DUNK, team=off_side, scorer=shot.get("shooter"))
+        if result.get("result") == "TURNOVER":
+            self.bus.emit(GE.TURNOVER, team=off_side)
+        for inj in result.get("new_injuries", ()):
+            self.bus.emit(GE.INJURY, **inj)
 
     def simulate_game(self, verbose: bool = False) -> Dict[str, Any]:
         """Run a full game to completion by driving the stepper."""
@@ -1381,6 +1440,11 @@ class NBAUnifiedEngine:
             "away": team_block(self.away),
             "possessions": len(self.play_by_play),
             "injuries": list(self.injuries),
+            "broadcast": {
+                "presentation": self.presentation.to_telemetry(),
+                "officiating": self.officiating.to_telemetry(),
+                "referees": [r.to_telemetry() for r in self.referees],
+            },
         }
 
     # -- single-tick demo (preserved & upgraded to return telemetry) -----------
