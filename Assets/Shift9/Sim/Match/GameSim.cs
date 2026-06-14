@@ -15,8 +15,6 @@ namespace Shift9.Sim.Match
     /// </summary>
     public sealed class GameSim
     {
-        private const float OffensiveReboundChance = 0.30f;
-
         private readonly GameClock _clock;
         private readonly Scoreboard _scoreboard = new Scoreboard();
         private readonly Possession _possession = new Possession(Team.Home);
@@ -59,7 +57,8 @@ namespace Shift9.Sim.Match
             }
             else if (pe == PossessionEvent.ShotMissed)
             {
-                bool offensiveRebound = _master.NextFloat() < OffensiveReboundChance;
+                // Real rebound: the possession decided who corralled the loose ball.
+                bool offensiveRebound = _current.LastReboundOffensive;
                 if (!offensiveRebound) _possession.Flip();
                 StartPossession(offensiveRebound ? false : true);
             }

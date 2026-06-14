@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Shift9.Sim.Ball;
 using Shift9.Sim.Core;
 using Shift9.Sim.Defense;
@@ -8,7 +9,7 @@ using UnityEngine;
 
 namespace Shift9.Sim.Match
 {
-    public enum PossessionPhase : byte { BringUp, Shooting, Made, Missed }
+    public enum PossessionPhase : byte { BringUp, Playmaking, Shooting, Rebound, Made, Missed }
     public enum PossessionEvent : byte { None, ShotReleased, ShotMade, ShotMissed }
 
     public struct SimPlayerState
@@ -21,10 +22,10 @@ namespace Shift9.Sim.Match
     }
 
     /// <summary>
-    /// A deterministic single possession for either team attacking either basket. Players walk
-    /// into a half-court set, the ball handler shoots (rating + contest + timing → make/miss via
-    /// <see cref="ShotResolver"/>), the ball flies and bounces (<see cref="BallBody"/> +
-    /// <see cref="RimSolver"/>), and the shared scoreboard updates. Same seed ⇒ identical possession.
+    /// A deterministic single possession with real basketball flow: players bring it up, swing the
+    /// ball with a pass chain, sometimes a dribble drive, then a shot (rating + contest + timing →
+    /// make/miss). Defenders track their man and pressure the ball; a miss is a live rebound decided
+    /// by who is closest to the loose ball. Same seed ⇒ identical possession.
     /// </summary>
     public sealed class PossessionSim
     {
@@ -32,13 +33,21 @@ namespace Shift9.Sim.Match
         public const int TotalPlayers = 10;
 
         private const float PlayerSpeed = 14f;
+        private const float PassSpeed = 30f;
         private const float HoldHeight = 4f;
         private const float ReleaseHeight = 7f;
         private const float ContestRating = 72f;
         private const float ShooterRating = 80f;
         private const float ArriveRadius = 1f;
         private const float MaxBringUpSeconds = 6f;
+        private const float MaxPlaySeconds = 4f;
         private const float FloorTouch = 0.6f;
+        private const float DriveFraction = 0.55f;
+        private const float DriveChance = 0.45f;
+        private const float GoalsideStep = 3f;     // defender sits this far goalside of his man
+        private const float OnBallPressure = 1.6f; // on-ball defender closes to about this gap
+        private const float ReboundConverge = 0.5f;
+        private const float ReboundRattle = 3f;    // randomness (ft) on who corrals a loose ball
 
         private readonly SimPlayerState[] _players = new SimPlayerState[TotalPlayers];
         private readonly BallBody _ball = new BallBody();
@@ -48,16 +57,28 @@ namespace Shift9.Sim.Match
 
         private readonly bool _offenseIsHome;
         private readonly bool _attackHomeBasket;
-        private readonly float _dir;            // +1 attacks +z, -1 attacks -z
+        private readonly float _dir;
         private readonly Vector3 _shotSpot;
-        private readonly int _handler = 0;
 
         private bool _ballInFlight;
         private Vector3 _ballHeld;
-        private bool _shotMade;
-        private ShotZone _shotZone;
         private PossessionPhase _phase = PossessionPhase.BringUp;
         private float _phaseTime;
+
+        // Playmaking
+        private int[] _passChain;
+        private int _passLeg;
+        private float _passT;
+        private int _holder;
+        private int _shooter;
+        private bool _drive;
+        private bool _driveStarted;
+
+        // Outcome
+        private bool _shotMade;
+        private ShotZone _shotZone;
+        private Vector3 _ballGround;
+        private bool _reboundOffensive;
 
         public PossessionPhase Phase => _phase;
         public int HomeScore => _scoreboard.HomeScore;
@@ -65,8 +86,11 @@ namespace Shift9.Sim.Match
         public int PlayerCount => TotalPlayers;
         public SimPlayerState GetPlayer(int i) => _players[i];
         public Vector3 BallPosition => _ballInFlight ? _ball.Position : _ballHeld;
+        public ShotZone LastShotZone => _shotZone;
+        public bool LastReboundOffensive => _reboundOffensive;
 
         private Vector3 Basket => _attackHomeBasket ? SimConstants.HoopHome : SimConstants.HoopAway;
+        private Vector3 BasketFloor => new Vector3(Basket.x, 0f, Basket.z);
 
         public PossessionSim(ulong seed, Scoreboard scoreboard, bool offenseIsHome, bool attackHomeBasket)
         {
@@ -76,36 +100,33 @@ namespace Shift9.Sim.Match
             _attackHomeBasket = attackHomeBasket;
             _dir = attackHomeBasket ? -1f : 1f;
             _rim = attackHomeBasket ? RimSolver.ForHome() : RimSolver.ForAway();
-            _shotSpot = new Vector3(0f, 0f, 22f * _dir);
 
             Vector3[] offense = Formation.Offense();
             Vector3[] defense = Formation.Defense();
+            _shotSpot = Mirror(offense[0]);
             for (int i = 0; i < PlayersPerTeam; i++)
             {
-                Vector3 setSpot = Mirror(offense[i]);
+                Vector3 set = Mirror(offense[i]);
                 _players[i] = new SimPlayerState
                 {
-                    Position = setSpot - new Vector3(0f, 0f, 10f * _dir),  // walk up from behind
-                    Target = i == _handler ? _shotSpot : setSpot,
-                    IsOffense = true,
-                    IsHomeTeam = offenseIsHome,
-                    Speed = PlayerSpeed
+                    Position = set - new Vector3(0f, 0f, 10f * _dir),
+                    Target = i == 0 ? _shotSpot : set,
+                    IsOffense = true, IsHomeTeam = offenseIsHome, Speed = PlayerSpeed
                 };
-
-                Vector3 defSpot = Mirror(defense[i]);
+                Vector3 def = Mirror(defense[i]);
                 _players[PlayersPerTeam + i] = new SimPlayerState
                 {
-                    Position = defSpot - new Vector3(0f, 0f, 8f * _dir),
-                    Target = defSpot,
-                    IsOffense = false,
-                    IsHomeTeam = !offenseIsHome,
-                    Speed = PlayerSpeed
+                    Position = def - new Vector3(0f, 0f, 8f * _dir),
+                    Target = def,
+                    IsOffense = false, IsHomeTeam = !offenseIsHome, Speed = PlayerSpeed
                 };
             }
-            _ballHeld = _players[_handler].Position + new Vector3(0f, HoldHeight, 0f);
+            _holder = 0;
+            _ballHeld = ChestPos(0);
         }
 
         private Vector3 Mirror(Vector3 p) => new Vector3(p.x, p.y, p.z * _dir);
+        private Vector3 ChestPos(int i) => _players[i].Position + new Vector3(0f, HoldHeight, 0f);
 
         public PossessionEvent Tick(float dt)
         {
@@ -113,20 +134,86 @@ namespace Shift9.Sim.Match
                 return PossessionEvent.None;
 
             _phaseTime += dt;
-            UpdateMovement(dt);
-
-            if (_phase == PossessionPhase.BringUp)
+            switch (_phase)
             {
-                Vector3 h = _players[_handler].Position;
-                float dist = Vector2.Distance(new Vector2(h.x, h.z), new Vector2(_shotSpot.x, _shotSpot.z));
-                if (dist <= ArriveRadius || _phaseTime >= MaxBringUpSeconds)
-                {
-                    ReleaseShot();
-                    return PossessionEvent.ShotReleased;
-                }
+                case PossessionPhase.BringUp:    return TickBringUp(dt);
+                case PossessionPhase.Playmaking: return TickPlaymaking(dt);
+                case PossessionPhase.Shooting:   return TickShooting(dt);
+                case PossessionPhase.Rebound:    return TickRebound(dt);
+                default:                         return PossessionEvent.None;
+            }
+        }
+
+        private PossessionEvent TickBringUp(float dt)
+        {
+            ReactiveDefense();
+            MoveAll(dt);
+            _ballHeld = ChestPos(_holder);
+
+            if (FlatDist(_players[0].Position, _shotSpot) <= ArriveRadius || _phaseTime >= MaxBringUpSeconds)
+                EnterPlaymaking();
+            return PossessionEvent.None;
+        }
+
+        private void EnterPlaymaking()
+        {
+            int passes = _rng.Range(0, 3); // 0..2 passes
+            var chain = new List<int> { 0 };
+            int cur = 0;
+            for (int k = 0; k < passes; k++)
+            {
+                int next = PickOther(cur);
+                chain.Add(next);
+                cur = next;
+            }
+            _passChain = chain.ToArray();
+            _shooter = cur;
+            _drive = _rng.NextFloat() < DriveChance;
+
+            _passLeg = 0;
+            _passT = 0f;
+            _holder = 0;
+            _driveStarted = false;
+            _phase = PossessionPhase.Playmaking;
+            _phaseTime = 0f;
+        }
+
+        private PossessionEvent TickPlaymaking(float dt)
+        {
+            ReactiveDefense();
+            MoveAll(dt);
+
+            if (_passLeg < _passChain.Length - 1)
+            {
+                int from = _passChain[_passLeg];
+                int to = _passChain[_passLeg + 1];
+                _passT += dt / PassDuration(from, to);
+                _ballHeld = Vector3.Lerp(ChestPos(from), ChestPos(to), Mathf.Clamp01(_passT));
+                if (_passT >= 1f) { _passLeg++; _holder = _passChain[_passLeg]; _passT = 0f; }
                 return PossessionEvent.None;
             }
 
+            // Ball is with the shooter.
+            _holder = _shooter;
+            if (_drive)
+            {
+                if (!_driveStarted)
+                {
+                    _driveStarted = true;
+                    _players[_shooter].Target = Vector3.Lerp(Flat(_players[_shooter].Position), BasketFloor, DriveFraction);
+                }
+                _ballHeld = ChestPos(_shooter);
+                if (FlatDist(_players[_shooter].Position, _players[_shooter].Target) <= ArriveRadius || _phaseTime >= MaxPlaySeconds)
+                    return ReleaseShot(_shooter);
+                return PossessionEvent.None;
+            }
+
+            _ballHeld = ChestPos(_shooter);
+            return ReleaseShot(_shooter);
+        }
+
+        private PossessionEvent TickShooting(float dt)
+        {
             BallContact contact = _ball.Step(dt, _rim);
             if (contact == BallContact.ThroughNet && _shotMade)
             {
@@ -136,36 +223,57 @@ namespace Shift9.Sim.Match
             }
             if (_ball.Position.y <= FloorTouch)
             {
-                _phase = PossessionPhase.Missed;
-                return PossessionEvent.ShotMissed;
+                EnterRebound();
+                return PossessionEvent.None;
             }
             return PossessionEvent.None;
         }
 
-        private void UpdateMovement(float dt)
+        private void EnterRebound()
         {
-            for (int i = 0; i < TotalPlayers; i++)
-            {
-                float step = _players[i].Speed * dt;
-                _players[i].Position = MoveToward(_players[i].Position, _players[i].Target, step);
-            }
-            if (!_ballInFlight)
-                _ballHeld = _players[_handler].Position + new Vector3(0f, HoldHeight, 0f);
+            _ballInFlight = false;
+            _ballGround = new Vector3(_ball.Position.x, SimConstants.BallRadius, _ball.Position.z);
+            _ballHeld = _ballGround;
+            // Clamp the crash point to the court so converging players never run out of bounds.
+            Vector3 spot = new Vector3(
+                Mathf.Clamp(_ballGround.x, -SimConstants.CourtHalfWidth, SimConstants.CourtHalfWidth),
+                0f,
+                Mathf.Clamp(_ballGround.z, -SimConstants.CourtHalfLength, SimConstants.CourtHalfLength));
+            for (int i = 0; i < TotalPlayers; i++) _players[i].Target = spot; // everyone crashes
+            _phase = PossessionPhase.Rebound;
+            _phaseTime = 0f;
         }
 
-        private void ReleaseShot()
+        private PossessionEvent TickRebound(float dt)
         {
-            Vector3 handler = _players[_handler].Position;
+            MoveAll(dt);
+            if (_phaseTime < ReboundConverge) return PossessionEvent.None;
+
+            int best = 0;
+            float bestScore = float.MaxValue;
+            Vector3 ball = Flat(_ballGround);
+            for (int i = 0; i < TotalPlayers; i++)
+            {
+                float score = FlatDist(_players[i].Position, ball) - _rng.NextFloat() * ReboundRattle;
+                if (score < bestScore) { bestScore = score; best = i; }
+            }
+            _reboundOffensive = _players[best].IsOffense;
+            _phase = PossessionPhase.Missed;
+            return PossessionEvent.ShotMissed;
+        }
+
+        private PossessionEvent ReleaseShot(int shooter)
+        {
+            Vector3 spot = _players[shooter].Position;
 
             var defenders = new DefenderState[PlayersPerTeam];
             for (int i = 0; i < PlayersPerTeam; i++)
                 defenders[i] = new DefenderState(_players[PlayersPerTeam + i].Position, (byte)ContestRating);
-
-            float openness = OpennessCalculator.Compute(handler, _attackHomeBasket, defenders);
+            float openness = OpennessCalculator.Compute(spot, _attackHomeBasket, defenders);
 
             var ctx = new ShotContext
             {
-                Position = handler,
+                Position = spot,
                 HomeBasket = _attackHomeBasket,
                 Attributes = AttributeProfile.Uniform((byte)ShooterRating),
                 Dynamics = PlayerDynamics.Default,
@@ -178,9 +286,7 @@ namespace Shift9.Sim.Match
             _shotMade = result.Made;
             _shotZone = result.Zone;
 
-            // Make → aim at rim center (swish); miss → aim at the front rim so it clanks and falls,
-            // keeping the visible flight faithful to the resolved result.
-            Vector3 from = handler + new Vector3(0f, ReleaseHeight, 0f);
+            Vector3 from = spot + new Vector3(0f, ReleaseHeight, 0f);
             Vector3 target = _shotMade
                 ? Basket
                 : Basket + new Vector3(0f, 0f, -_dir * (SimConstants.RimRadius + 0.1f));
@@ -192,6 +298,52 @@ namespace Shift9.Sim.Match
             _ballInFlight = true;
             _phase = PossessionPhase.Shooting;
             _phaseTime = 0f;
+            return PossessionEvent.ShotReleased;
+        }
+
+        // Defenders guard their man (same index), goalside; the on-ball defender presses the holder.
+        private void ReactiveDefense()
+        {
+            for (int j = 0; j < PlayersPerTeam; j++)
+            {
+                Vector3 man = _players[j].Position;
+                Vector3 toBasket = (BasketFloor - man);
+                toBasket.y = 0f;
+                Vector3 dir = toBasket.sqrMagnitude > 1e-4f ? toBasket.normalized : Vector3.forward;
+                _players[PlayersPerTeam + j].Target = man + dir * GoalsideStep;
+            }
+            int onBall = PlayersPerTeam + _holder;
+            Vector3 h = _players[_holder].Position;
+            Vector3 tb = BasketFloor - h; tb.y = 0f;
+            Vector3 d = tb.sqrMagnitude > 1e-4f ? tb.normalized : Vector3.forward;
+            _players[onBall].Target = h + d * OnBallPressure;
+        }
+
+        private void MoveAll(float dt)
+        {
+            for (int i = 0; i < TotalPlayers; i++)
+            {
+                float step = _players[i].Speed * dt;
+                _players[i].Position = MoveToward(_players[i].Position, _players[i].Target, step);
+            }
+        }
+
+        private int PickOther(int cur)
+        {
+            int r = _rng.Range(0, PlayersPerTeam - 1);
+            if (r >= cur) r++;
+            return r;
+        }
+
+        private float PassDuration(int from, int to) =>
+            Mathf.Max(0.15f, FlatDist(_players[from].Position, _players[to].Position) / PassSpeed);
+
+        private static Vector3 Flat(Vector3 p) => new Vector3(p.x, 0f, p.z);
+
+        private static float FlatDist(Vector3 a, Vector3 b)
+        {
+            float dx = a.x - b.x, dz = a.z - b.z;
+            return Mathf.Sqrt(dx * dx + dz * dz);
         }
 
         private static Vector3 MoveToward(Vector3 current, Vector3 target, float maxDelta)
