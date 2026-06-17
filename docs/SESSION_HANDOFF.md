@@ -55,10 +55,14 @@ Required packages: `com.unity.nuget.newtonsoft-json`, `com.unity.test-framework`
 - **Calibrate AttributeFormula** weights against real data (currently reasonable, not tuned).
 - **Fouls & free throws** (the FT path exists in the shot resolver; not wired to contact).
 - **Player models/animation, crowd, scorer's table, floor logos/real rim+net** (still blockout).
-- **Scene wiring**: no saved scene. To see it live: empty GameObject + `GameView` (live game),
-  `BroadcastCameraRig` on the Camera (target = the ball/GameView), `ScoreboardHud` (point at the
-  GameView), and `CourtBuilder` for the floor. Run the **Shift9 ▸ Create Player Locomotion
-  Controller** menu to generate the animator controller.
+- **Scene wiring**: no saved scene, but **`GameBootstrap`** does it for you — add that one
+  component to an empty GameObject and press Play; it spawns the light, court, game (players +
+  ball), broadcast camera, and scoreboard, all self-wired. (Manual alternative: `GameView` +
+  `CourtBuilder` + `BroadcastCameraRig` on the Camera + `ScoreboardHud`.) Run **Shift9 ▸ Create
+  Player Animator Controller** for the animation controller.
+- **Not yet a full Unity project**: `Packages/manifest.json` is included (Newtonsoft etc.), but
+  there is no `ProjectSettings/`. Easiest path: create a new 3D project in your Unity version and
+  copy `Assets/Shift9` into it (then add `com.unity.nuget.newtonsoft-json` if needed).
 - **Real-team logos** draw only the color tab until `TeamLogoLoader` is called with a cache.
 - **Fixed-point determinism** for cross-platform online was deliberately deferred (single seeded
   RNG now; revisit when online is actually built).

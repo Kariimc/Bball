@@ -67,6 +67,7 @@ namespace Shift9.Presentation
 
         private void OnGUI()
         {
+            if (_gameView == null) _gameView = Object.FindObjectOfType<GameView>();
             GameSim g = _gameView != null ? _gameView.Sim : null;
             if (g == null) return;
             EnsureStyles();

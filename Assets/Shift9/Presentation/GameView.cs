@@ -28,6 +28,12 @@ namespace Shift9.Presentation
 
         /// <summary>The live game, for HUDs/overlays to read.</summary>
         public GameSim Sim => _sim;
+
+        /// <summary>The ball transform, for the camera to follow. Available after Start.</summary>
+        public Transform BallTransform => _ballView;
+
+        /// <summary>Game seed; set before the first frame (e.g., from a bootstrapper).</summary>
+        public ulong Seed { get => _seed; set => _seed = value; }
         private Renderer[] _playerRenderers;
         private PlayerAnimationDriver[] _drivers;
         private Transform _ballView;

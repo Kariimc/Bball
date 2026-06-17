@@ -23,6 +23,11 @@ namespace Shift9.Presentation
 
         private void LateUpdate()
         {
+            if (_target == null)
+            {
+                var view = Object.FindObjectOfType<GameView>();
+                if (view != null) _target = view.BallTransform;
+            }
             float targetZ = _target != null ? _target.position.z : 0f;
             _followZ = _trackSmoothing > 0f
                 ? Mathf.SmoothDamp(_followZ, targetZ, ref _followZVelocity, _trackSmoothing)
