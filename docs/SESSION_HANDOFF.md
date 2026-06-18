@@ -52,9 +52,9 @@ Required packages: `com.unity.nuget.newtonsoft-json`, `com.unity.test-framework`
 - **Animation clips + state-graph**: triggers/params fire, but no Humanoid rig, clips, or
   action-layer states. (Decision so far: Mecanim rig, sim stays authoritative, locomotion first,
   clips later.) Author states that play each `MoveId`.
-- **Calibrate AttributeFormula** weights against real data (currently reasonable, not tuned).
-- **Fouls & free throws** (the FT path exists in the shot resolver; not wired to contact).
 - **Player models/animation, crowd, scorer's table, floor logos/real rim+net** (still blockout).
+- (Done this session: shooting fouls + free throws, live per-player box score, formula
+  calibration tests. A box-score HUD/overlay to display the stat lines is still TODO.)
 - **Scene wiring**: no saved scene, but **`GameBootstrap`** does it for you — add that one
   component to an empty GameObject and press Play; it spawns the light, court, game (players +
   ball), broadcast camera, and scoreboard, all self-wired. (Manual alternative: `GameView` +

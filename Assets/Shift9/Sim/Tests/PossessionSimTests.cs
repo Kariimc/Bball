@@ -35,15 +35,16 @@ namespace Shift9.Sim.Tests
         }
 
         [Test]
-        public void Score_OnlyChangesOnAMake()
+        public void MadeFieldGoal_ScoresAtLeastTwo()
         {
+            // Scores come only from made field goals (>=2) and free throws (fouls); never negative.
             for (ulong seed = 1; seed <= 12; seed++)
             {
                 var sim = Home(seed);
                 for (int i = 0; i < 1200 && !Terminal(sim.Phase); i++) sim.Tick(Dt);
 
                 if (sim.Phase == PossessionPhase.Made) Assert.GreaterOrEqual(sim.HomeScore, 2);
-                else Assert.AreEqual(0, sim.HomeScore);
+                Assert.GreaterOrEqual(sim.HomeScore, 0);
             }
         }
 

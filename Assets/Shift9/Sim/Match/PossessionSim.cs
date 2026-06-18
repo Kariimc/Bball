@@ -51,6 +51,7 @@ namespace Shift9.Sim.Match
         private const float ReboundSkillBonus = 2f;   // ft of "reach" a 99 rebounder gains
         private const float PassTurnoverBase = 0.035f;
         private const float DriveTurnoverBase = 0.03f;
+        private const float FoulBase = 0.05f;
 
         private readonly SimPlayerState[] _players = new SimPlayerState[TotalPlayers];
         private readonly BallBody _ball = new BallBody();
@@ -89,6 +90,12 @@ namespace Shift9.Sim.Match
         private int _lastBlockerIndex = -1;
         private bool _crossoverOpen;
 
+        private bool _lastShotFouled;
+        private int _ftMade, _ftAttempts;
+        private int _foulingDefender = -1;
+        private int _lastAssist = -1;
+        private int _lastStealer = -1;
+
         public PossessionPhase Phase => _phase;
         public int HomeScore => _scoreboard.HomeScore;
         public int AwayScore => _scoreboard.AwayScore;
@@ -102,6 +109,12 @@ namespace Shift9.Sim.Match
         public FinishMove LastFinishMove => _lastFinish;
         public DefenseMove LastBlock => _lastBlock;
         public int LastBlockerIndex => _lastBlockerIndex;
+        public bool LastShotFouled => _lastShotFouled;
+        public int FreeThrowsMade => _ftMade;
+        public int FreeThrowsAttempted => _ftAttempts;
+        public int FoulingDefenderIndex => _foulingDefender;
+        public int LastAssistPlayer => _lastAssist;
+        public int LastStealerIndex => _lastStealer;
 
         public int BallHolderIndex
         {
@@ -219,7 +232,7 @@ namespace Shift9.Sim.Match
                 if (_announcedLeg != _passLeg)
                 {
                     _announcedLeg = _passLeg;
-                    if (PassStolen(from)) return Turnover(from);
+                    if (PassStolen(from)) { _lastStealer = PlayersPerTeam + from; return Turnover(from); }
                     _lastEventPlayer = from;
                     return PossessionEvent.Pass;
                 }
@@ -238,7 +251,7 @@ namespace Shift9.Sim.Match
                     bool pressured = FlatDist(_players[PlayersPerTeam + _shooter].Position, _players[_shooter].Position) < 5f;
                     _lastDribble = MoveSelector.SelectDribble(_players[_shooter].Attributes, pressured, ref _rng);
                     if (_lastDribble == DribbleMove.SignatureCrossover) _crossoverOpen = true; // defender stumbles
-                    if (HandleLost(_shooter)) return Turnover(_shooter);
+                    if (HandleLost(_shooter)) { _lastStealer = PlayersPerTeam + _shooter; return Turnover(_shooter); }
                     _players[_shooter].Target = Vector3.Lerp(Flat(_players[_shooter].Position), BasketFloor, DriveFraction);
                 }
                 _ballHeld = ChestPos(_shooter);
@@ -345,6 +358,10 @@ namespace Shift9.Sim.Match
             _shotMade = result.Made && !blocked; // an elite block denies the bucket
             _shotZone = result.Zone;
 
+            // An assist is credited to whoever passed to the shooter (if a pass set up the shot).
+            _lastAssist = (_passChain != null && _passChain.Length >= 2) ? _passChain[_passChain.Length - 2] : -1;
+            ResolveFoul(shooter, spot, inside, contested, zone == ShotZone.ThreePoint, blocked);
+
             Vector3 from = spot + new Vector3(0f, ReleaseHeight, 0f);
             Vector3 target = _shotMade
                 ? Basket
@@ -359,6 +376,37 @@ namespace Shift9.Sim.Match
             _phaseTime = 0f;
             _lastEventPlayer = shooter;
             return PossessionEvent.ShotReleased;
+        }
+
+        // A shooting foul (not on a clean block) sends the shooter to the line: and-one on a make,
+        // else 2 (or 3 behind the arc). FTs resolve immediately via the free-throw shot path.
+        private void ResolveFoul(int shooter, Vector3 spot, bool inside, bool contested, bool threePoint, bool blocked)
+        {
+            _lastShotFouled = false; _ftMade = 0; _ftAttempts = 0; _foulingDefender = -1;
+            if (blocked) return;
+
+            float discipline = _players[PlayersPerTeam + shooter].Attributes.DefensiveAwareness / 99f;
+            float chance = (FoulBase + (inside ? 0.06f : 0.02f) + (contested ? 0.05f : 0f)) * (1.2f - 0.5f * discipline);
+            if (!_rng.Chance(chance)) return;
+
+            _lastShotFouled = true;
+            _foulingDefender = PlayersPerTeam + shooter;
+            int attempts = _shotMade ? 1 : (threePoint ? 3 : 2);
+            for (int k = 0; k < attempts; k++)
+            {
+                var ft = new ShotContext
+                {
+                    Position = spot, HomeBasket = _attackHomeBasket,
+                    Attributes = _players[shooter].Attributes, Dynamics = PlayerDynamics.Default,
+                    Openness = 1f, ReleaseErrorSeconds = 0f, IsFreeThrow = true
+                };
+                _ftAttempts++;
+                if (ShotResolver.Resolve(ft, ref _rng, ShotModelConfig.Default).Made)
+                {
+                    _ftMade++;
+                    _scoreboard.AddBasket(_offenseIsHome, ShotZone.FreeThrow);
+                }
+            }
         }
 
         // ---- rating-driven helpers ----

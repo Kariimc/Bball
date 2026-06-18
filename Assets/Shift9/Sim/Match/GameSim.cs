@@ -2,6 +2,8 @@ using Shift9.Sim.Core;
 using Shift9.Sim.Moves;
 using Shift9.Sim.Players;
 using Shift9.Sim.Rules;
+using Shift9.Sim.Shooting;
+using Shift9.Sim.Stats;
 using UnityEngine;
 
 namespace Shift9.Sim.Match
@@ -33,6 +35,7 @@ namespace Shift9.Sim.Match
         private PossessionSim _current;
         private readonly AttributeProfile[] _homeAttrs;
         private readonly AttributeProfile[] _awayAttrs;
+        private readonly BoxScore _box = new BoxScore();
 
         public int HomeScore => _scoreboard.HomeScore;
         public int AwayScore => _scoreboard.AwayScore;
@@ -50,6 +53,7 @@ namespace Shift9.Sim.Match
         public FinishMove LastFinishMove => _current.LastFinishMove;
         public DefenseMove LastBlock => _current.LastBlock;
         public int LastBlockerIndex => _current.LastBlockerIndex;
+        public BoxScore Box => _box;
 
         public GameSim(ulong seed, float quarterLength = 720f, int numQuarters = 4,
             AttributeProfile[] homeRoster = null, AttributeProfile[] awayRoster = null)
@@ -73,6 +77,7 @@ namespace Shift9.Sim.Match
 
             PossessionEvent pe = _current.Tick(dt);
             int who = _current.LastEventPlayer; // capture before a new possession replaces _current
+            RecordStats(pe, who);               // record while _current/_possession still reflect this play
 
             if (pe == PossessionEvent.ShotMade)
             {
@@ -81,10 +86,17 @@ namespace Shift9.Sim.Match
             }
             else if (pe == PossessionEvent.ShotMissed)
             {
-                // Real rebound: the possession decided who corralled the loose ball.
-                bool offensiveRebound = _current.LastReboundOffensive;
-                if (!offensiveRebound) _possession.Flip();
-                StartPossession(offensiveRebound ? false : true);
+                if (_current.LastShotFouled)
+                {
+                    _possession.Flip(); // shooter was at the line, not a live rebound
+                    StartPossession(true);
+                }
+                else
+                {
+                    bool offensiveRebound = _current.LastReboundOffensive;
+                    if (!offensiveRebound) _possession.Flip();
+                    StartPossession(offensiveRebound ? false : true);
+                }
             }
             else if (pe == PossessionEvent.Turnover)
             {
@@ -93,6 +105,59 @@ namespace Shift9.Sim.Match
             }
 
             return new TickReport(pe, pe == PossessionEvent.None ? -1 : who);
+        }
+
+        // Box-score recording. Called before any possession flip, so _possession reflects who was
+        // on offense for this play. Offense slots 0..4 map to the offense team, defense slots 5..9
+        // to the other team.
+        private void RecordStats(PossessionEvent pe, int who)
+        {
+            bool offHome = _possession.HomeOnOffense;
+            switch (pe)
+            {
+                case PossessionEvent.ShotReleased:
+                {
+                    StatLine shooter = Line(who, offHome);
+                    shooter.FieldGoalsAttempted++;
+                    if (_current.LastShotZone == ShotZone.ThreePoint) shooter.ThreesAttempted++;
+
+                    if (_current.LastBlock == DefenseMove.SignatureBlock && _current.LastBlockerIndex >= 0)
+                        Line(_current.LastBlockerIndex, offHome).Blocks++;
+
+                    if (_current.LastShotFouled)
+                    {
+                        if (_current.FoulingDefenderIndex >= 0) Line(_current.FoulingDefenderIndex, offHome).Fouls++;
+                        shooter.FreeThrowsAttempted += _current.FreeThrowsAttempted;
+                        shooter.FreeThrowsMade += _current.FreeThrowsMade;
+                        shooter.Points += _current.FreeThrowsMade;
+                    }
+                    break;
+                }
+                case PossessionEvent.ShotMade:
+                {
+                    StatLine shooter = Line(who, offHome);
+                    shooter.FieldGoalsMade++;
+                    bool three = _current.LastShotZone == ShotZone.ThreePoint;
+                    shooter.Points += three ? 3 : 2;
+                    if (three) shooter.ThreesMade++;
+                    if (_current.LastAssistPlayer >= 0) Line(_current.LastAssistPlayer, offHome).Assists++;
+                    break;
+                }
+                case PossessionEvent.ShotMissed:
+                    if (!_current.LastShotFouled) Line(who, offHome).Rebounds++;
+                    break;
+                case PossessionEvent.Turnover:
+                    Line(who, offHome).Turnovers++;
+                    if (_current.LastStealerIndex >= 0) Line(_current.LastStealerIndex, offHome).Steals++;
+                    break;
+            }
+        }
+
+        private StatLine Line(int slot, bool offenseIsHome)
+        {
+            bool home = slot < PossessionSim.PlayersPerTeam ? offenseIsHome : !offenseIsHome;
+            int idx = slot < PossessionSim.PlayersPerTeam ? slot : slot - PossessionSim.PlayersPerTeam;
+            return _box.Line(home, idx);
         }
 
         private void StartPossession(bool fullShotClock)
