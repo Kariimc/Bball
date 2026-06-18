@@ -53,5 +53,45 @@ namespace Shift9.Sim.Tests
             Assert.That(a.Speed, Is.InRange(55, 90));
             Assert.Less(a.InteriorDefense, 60);
         }
+
+        [Test]
+        public void DefensiveSpecialist_HighDefenseRatings()
+        {
+            var a = AttributeFormula.FromStats(new PlayerStats
+            {
+                Points = 8, FieldGoalPct = 0.46f, ThreePtPct = 0.34f, ThreePtAtt = 3f, FreeThrowPct = 0.75f,
+                Assists = 2, Turnovers = 1, Rebounds = 5, OffRebounds = 1, Blocks = 1.5f, Steals = 2.0f,
+                HeightInches = 78, WeightLbs = 210
+            });
+            Assert.That(a.PerimeterDefense, Is.InRange(60, 99));
+            Assert.That(a.DefensiveAwareness, Is.InRange(55, 99));
+        }
+
+        [Test]
+        public void ThreeAndDWing_ShootsAndDefends()
+        {
+            var a = AttributeFormula.FromStats(new PlayerStats
+            {
+                Points = 12, FieldGoalPct = 0.46f, ThreePtPct = 0.40f, ThreePtAtt = 6f, FreeThrowPct = 0.85f,
+                Assists = 2, Turnovers = 1, Rebounds = 4, OffRebounds = 0.7f, Blocks = 0.5f, Steals = 1.5f,
+                HeightInches = 80, WeightLbs = 215
+            });
+            Assert.That(a.ThreePoint, Is.InRange(65, 95));
+            Assert.That(a.FreeThrow, Is.InRange(70, 95));
+            Assert.That(a.PerimeterDefense, Is.InRange(45, 80));
+        }
+
+        [Test]
+        public void StretchBig_ShootsButNotARimProtector()
+        {
+            var a = AttributeFormula.FromStats(new PlayerStats
+            {
+                Points = 15, FieldGoalPct = 0.50f, ThreePtPct = 0.38f, ThreePtAtt = 5f, FreeThrowPct = 0.80f,
+                Assists = 2, Turnovers = 1.5f, Rebounds = 8, OffRebounds = 1.5f, Blocks = 1f, Steals = 0.6f,
+                HeightInches = 82, WeightLbs = 240
+            });
+            Assert.That(a.ThreePoint, Is.InRange(45, 85));
+            Assert.That(a.InteriorDefense, Is.InRange(30, 65)); // not an elite rim protector
+        }
     }
 }
